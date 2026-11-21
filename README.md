@@ -1,14 +1,14 @@
 # VA电商浏览器 AI版 · VA Commerce Browser
 
-## 30 秒实测 · 30-second demo
+## 30 秒连续录屏 · 30-second live recording
 
-[![Codex 在后台搜索亚马逊并返回前三名，左侧前台标签始终保持原页](docs/va-commerce-browser-30s.gif)](https://github.com/thitrang20160-cell/va-commerce-browser/releases/download/v0.5.0/va-commerce-browser-30s.mp4)
+[![VA 浏览器实窗录屏，Codex 在后台搜索亚马逊并实时返回前三名](docs/va-commerce-browser-30s.gif)](https://github.com/thitrang20160-cell/va-commerce-browser/releases/download/v0.5.0/va-commerce-browser-screen-recording.mp4)
 
-[高清 MP4 · Download the 1080p video](https://github.com/thitrang20160-cell/va-commerce-browser/releases/download/v0.5.0/va-commerce-browser-30s.mp4)
+[高清录屏 MP4 · Download the 1080p recording](https://github.com/thitrang20160-cell/va-commerce-browser/releases/download/v0.5.0/va-commerce-browser-screen-recording.mp4)
 
-Codex 通过 MCP 在后台搜索亚马逊美国站，读取 30 个候选。前台标签始终停在原页。视频展示本次实测的页面截图、工具回执和前三名。
+这段录屏连续捕捉 VA 浏览器窗口。Codex 通过 MCP 在后台搜索亚马逊美国站，读取 30 个候选。前台一直停在原页，右侧为本次录制使用的实时 MCP 日志。
 
-Codex searches Amazon US in a background tab through MCP and ranks the results while the foreground tab stays on the original page.
+One continuous window capture. Codex searches Amazon US in a background tab through MCP while the original tab stays in front. The panel shows the live tool results for this recording.
 
 1. [FLATO 深灰防漏垫 · B0D1QGKMY8](https://www.amazon.com/dp/B0D1QGKMY8)
 2. [Ruinovate 加厚防漏垫 · B0H1B86B75](https://www.amazon.com/dp/B0H1B86B75)
