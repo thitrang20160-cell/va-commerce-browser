@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:">
+<title>VA电商浏览器 AI版</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<header><div class="brand"><span class="mark" aria-hidden="true">VA</span><strong>VA电商浏览器 AI版</strong></div><div id="tabs"></div><button id="new" title="新建标签页">＋</button></header>
+<nav><button id="back" title="后退">←</button><button id="forward" title="前进">→</button><button id="reload" title="刷新">↻</button>
+<form id="address-form"><input id="address" aria-label="网页地址" placeholder="输入网址，开始一个任务" autocomplete="off"></form>
+<button id="zoom-out">−</button><span id="zoom">100%</span><button id="zoom-in">＋</button>
+<aside>
+  <section><div class="eyebrow">AGENT WORKSPACE</div><h1>浏览器已就绪</h1><p id="ownership">选择标签页后，Agent 可以读取页面并执行任务。</p>
+  <button id="takeover" class="primary">暂停 / 人工接管</button><button id="resume" hidden>恢复 Agent 操作</button>
+  <button id="clipboard-write" class="clipboard-control" type="button" hidden title="允许当前页面的复制按钮写入剪贴板，60 秒后自动关闭">允许本页复制（60 秒）</button>
+  <button id="clipboard-site" class="clipboard-control" type="button" hidden>始终允许此网站复制</button></section>
+  <details id="site-permissions" hidden>
+    <summary>网站权限</summary>
+    <p id="permission-origin" class="muted"></p>
+    <label><input type="checkbox" name="camera"> 摄像头</label>
+    <label><input type="checkbox" name="microphone"> 麦克风</label>
+    <label><input type="checkbox" name="geolocation"> 定位</label>
+    <label><input type="checkbox" name="notifications"> 通知</label>
+    <label><input type="checkbox" name="screen"> 屏幕共享</label>
+    <p class="muted">每次屏幕共享仍需确认。</p>
+  </details>
+  <section><h2>标签任务</h2><div id="tab-tasks"></div></section>
+  <section><h2>已连接的 Agent</h2><div id="clients" class="muted">等待 MCP 客户端连接</div></section>
+  <section class="activity"><h2>操作记录</h2><div id="receipts" class="muted">操作完成后，回执会显示在这里。</div></section>
+  <section><h2>连接方式</h2><p class="muted">支持 MCP 标准接口。连接方法见项目 README。</p><p id="status" class="badge">本地运行</p></section>
+</aside>
+<div id="empty"><h2>开始浏览</h2><p>在地址栏输入网址，或新建一个标签页。</p></div>
+<div id="error" role="status" hidden></div>
+<script src="app.js"></script></body></html>
