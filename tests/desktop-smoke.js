@@ -64,7 +64,7 @@ test('Desktop MCP reads two background tabs and preserves the active tab', { tim
     for (const result of batch.results) assert.match(JSON.stringify(result), /Browser Connection Check|浏览器连接验证/);
     assert.equal((await call('browser_tabs')).active, initial.active);
     const status = await call('browser_status');
-    assert.match(status.app, /VA Commerce Browser|VA电商浏览器 AI版/);
+    assert.match(status.app, /VA Commerce Browser|VA 电商AI浏览器|VA电商浏览器 AI版/);
     assert.equal(status.mode, 'oss');
   } finally {
     await client.close();

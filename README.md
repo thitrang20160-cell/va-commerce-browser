@@ -1,4 +1,4 @@
-# VA Commerce Browser (`v0.6.0`)
+# VA 电商AI浏览器 · VA Commerce Browser (`v0.6.3`)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-14b8a6.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-22%2B-339933.svg)](https://nodejs.org/)
@@ -6,9 +6,9 @@
 [![Platforms](https://img.shields.io/badge/Platforms-Windows%20%7C%20macOS%20%7C%20Linux-0f172a.svg)](https://github.com/thitrang20160-cell/va-commerce-browser/releases)
 [![Token Savings](https://img.shields.io/badge/Snapshot%20Tokens--93.5%25-2dd4bf.svg)](#measured-token-efficiency-o200k_base)
 
-**One visible desktop browser shared safely across Claude Code, Codex, Cursor, Windsurf, and any MCP client — with persistent real logins, zero-disruption background execution, 180s per-tab agent leases, `-93.5%` compact snapshots, local video reading, SHA-256 idempotent action receipts, and a 50-line site extractor plugin host.**
+**One visible desktop browser shared safely across Claude Code, Codex, Cursor, Windsurf, and any MCP client — with persistent real logins, zero-disruption background execution, 180s per-tab agent leases, `-93.5%` compact snapshots, local video reading, SHA-256 idempotent action receipts, built-in 1-click MCP Connectors modal, and a 50-line site extractor plugin host.**
 
-> **中文简介**：面向 AI Agent 的开源可见桌面浏览器（MIT）。让 Claude Code / Codex / Cursor / Windsurf 通过标准 MCP 共享同一个真实登录浏览器——**后台静默执行不抢前台、多 Agent 分标签页租约隔离、紧凑快照直省 93.5% Token、写操作 SHA-256 幂等回执防重复下单、本机 FFmpeg/Whisper 读网页视频（音频零上传云端）、5 分钟可写自定义站点采集插件**，并支持顶部栏一键切换 **EN / 中文**。
+> **中文简介（VA 电商AI浏览器）**：面向 AI Agent 与跨境电商团队的开源可见桌面浏览器（MIT）。让 Claude Code / Codex / Cursor / Windsurf 通过标准 MCP 共享同一个真实登录浏览器——**后台静默执行不抢前台、多 Agent 分标签页租约隔离、紧凑快照直省 93.5% Token、写操作 SHA-256 幂等回执防重复下单、本机 FFmpeg/Whisper 读网页视频（音频零上传云端）、内置弹窗式一键 MCP 连接器、深浅双主题与可折叠侧边栏**，并支持顶部栏一键切换 **EN / 中文**。
 
 ---
 
@@ -34,7 +34,7 @@ Most browser automation MCP servers force a painful trade-off: spawn disposable 
 
 **VA Commerce Browser is built for real human + multi-agent daily work:**
 
-| Capability | Playwright / Puppeteer MCP | Headless Browser-Use Agents | **VA Commerce Browser (`v0.6.0`)** |
+| Capability | Playwright / Puppeteer MCP | Headless Browser-Use Agents | **VA 电商AI浏览器 (`v0.6.3`)** |
 | --- | --- | --- | --- |
 | **Persistent visible browser & real logins** | Ephemeral headless by default | Requires manual CDP attach | **Dedicated Electron desktop browser with persistent real profile** |
 | **Zero-disruption background execution** | Disrupts / steals active view | No interactive daily browsing shell | **Background tabs render off-top (`108/108` checks, `0` focus shifts)** |

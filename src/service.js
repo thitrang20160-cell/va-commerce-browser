@@ -23,7 +23,7 @@ button:disabled{background:#18222d;border-color:rgba(255,255,255,.08);color:#5d7
 .foot{display:flex;align-items:center;justify-content:space-between;margin-top:18px;padding-top:16px;border-top:1px solid rgba(255,255,255,.08)}
 a{color:#2dd4bf;text-decoration:none;font-weight:600}a:hover{text-decoration:underline}
 </style>
-<main><small class="eyebrow">VA电商浏览器 AI版 · 本地验证页</small><h1>从这里开始连接 Agent</h1>
+<main><small class="eyebrow">VA 电商AI浏览器 · 本地验证页</small><h1>从这里开始连接 Agent</h1>
 <p class="lead">这是本机示例表单。Agent 可以读取、填写、点击，并核对生成的回执。</p>
 <form id="form"><label for="name">项目名称</label><input id="name" name="name" placeholder="填写一个测试项目">
 <label for="kind">任务类型</label><select id="kind"><option value="research">资料整理</option><option value="listing">商品信息</option></select>

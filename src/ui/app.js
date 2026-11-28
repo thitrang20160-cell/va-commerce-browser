@@ -5,6 +5,7 @@ const t = (key, ...args) => i18n ? i18n.t(key, ...args) : key;
 const permissionInputs = [...document.querySelectorAll('#site-permissions input')];
 let appliedLocale = null;
 let appliedMode = null;
+let activeStudio = 'workspace';
 
 const command = async (name, args = {}) => {
   try { return await window.browserUI.command(name, args); }
@@ -13,6 +14,55 @@ const command = async (name, args = {}) => {
     setTimeout(() => { $('error').hidden = true; }, 6000);
   }
 };
+
+function switchStudio(mode) {
+  const panes = {
+    workspace: { pane: $('workspace-pane'), tab: $('workspace-toggle') },
+    discovery: { pane: $('product-discovery'), tab: $('discovery-toggle') },
+    batch: { pane: $('sellerstar-batch'), tab: $('batch-toggle') },
+  };
+  if (!panes[mode]?.pane || panes[mode]?.tab?.hidden) mode = 'workspace';
+  activeStudio = mode;
+  for (const [key, item] of Object.entries(panes)) {
+    const on = key === mode;
+    if (item.pane) item.pane.hidden = !on;
+    if (item.tab) {
+      item.tab.classList.toggle('active', on);
+      item.tab.setAttribute('aria-selected', String(on));
+      if (item.tab.hasAttribute('aria-expanded')) item.tab.setAttribute('aria-expanded', String(on));
+    }
+  }
+  const body = document.querySelector('.studio-body');
+  if (body) body.scrollTop = 0;
+}
+window.switchStudio = switchStudio;
+
+// Wire custom segmented pill selectors to hidden <select> elements
+document.querySelectorAll('.seg-pills[data-sync-select]').forEach(group => {
+  const targetId = group.getAttribute('data-sync-select');
+  const select = $(targetId);
+  const pills = [...group.querySelectorAll('.seg-pill')];
+  pills.forEach(pill => {
+    pill.onclick = () => {
+      const val = pill.getAttribute('data-val') ?? '';
+      if (select) select.value = val;
+      pills.forEach(p => p.classList.toggle('active', p === pill));
+    };
+  });
+});
+
+// Wire quick prompt preset chips in AI Discovery Studio
+document.querySelectorAll('#discovery-presets .preset-chip').forEach(chip => {
+  chip.onclick = () => {
+    const input = $('discovery-intent');
+    if (input) {
+      input.value = chip.getAttribute('data-prompt') || '';
+      input.focus();
+    }
+  };
+});
+
+if ($('workspace-toggle')) $('workspace-toggle').onclick = () => switchStudio('workspace');
 
 const extensionUpdaters = (window.browserExtensions || []).map(bind => bind($, command));
 const updateDiscovery = typeof bindProductDiscovery === 'function' ? bindProductDiscovery($, command) : () => {};
@@ -68,7 +118,7 @@ function update(state) {
 
   const discoveryEnabled = hasPanel(state, 'product-discovery');
   if ($('discovery-toggle')) $('discovery-toggle').hidden = !discoveryEnabled;
-  if ($('product-discovery') && !discoveryEnabled) $('product-discovery').hidden = true;
+  if (!discoveryEnabled && activeStudio === 'discovery') switchStudio('workspace');
 
   const active = state.tabs.find(tab => tab.id === state.active);
   if (document.activeElement !== $('address')) $('address').value = active?.url || '';
@@ -119,9 +169,13 @@ function update(state) {
   $('site-permissions').hidden = !active?.site_permission_origin;
   $('permission-origin').textContent = active?.site_permission_origin ?? '';
   for (const input of permissionInputs) input.checked = Boolean(active?.site_permissions?.[input.name]);
+  if ($('site-controls-card')) {
+    $('site-controls-card').hidden = clipboard.hidden && siteClipboard.hidden && $('site-permissions').hidden;
+  }
 
   for (const updater of extensionUpdaters) updater(state, active);
   if (discoveryEnabled) updateDiscovery(state);
+  switchStudio(activeStudio);
 
   $('status').textContent = t('statusLocal', state.version);
   $('empty').hidden = state.tabs.length > 0;

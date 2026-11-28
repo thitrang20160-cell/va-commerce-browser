@@ -271,10 +271,10 @@ export class BrowserEngine {
 
   layout() {
     const [width, height] = this.window.getContentSize();
-    const sidebarWidth = this.sidebarOpen ? 316 : 0;
-    const topChrome = 96;
+    const sidebarWidth = this.sidebarOpen ? 360 : 0;
+    const topChrome = 88;
     for (const t of this.tabs.values()) {
-      t.view.setBounds({ x: 0, y: topChrome, width: Math.max(300, width - sidebarWidth), height: Math.max(160, height - topChrome) });
+      t.view.setBounds({ x: 0, y: topChrome, width: Math.max(320, width - sidebarWidth), height: Math.max(160, height - topChrome) });
     }
   }
 
