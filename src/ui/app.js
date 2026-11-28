@@ -15,7 +15,6 @@ const command = async (name, args = {}) => {
 };
 
 const extensionUpdaters = (window.browserExtensions || []).map(bind => bind($, command));
-const updateMcpConnector = typeof bindMcpConnector === 'function' ? bindMcpConnector($, command) : () => {};
 const updateDiscovery = typeof bindProductDiscovery === 'function' ? bindProductDiscovery($, command) : () => {};
 
 function hasPanel(state, name) {
@@ -50,6 +49,15 @@ function update(state) {
   current = state;
   const nextLocale = state.locale || 'zh-CN';
   const nextMode = state.mode || 'internal';
+  const nextTheme = state.theme === 'light' ? 'light' : 'dark';
+  document.documentElement.dataset.theme = nextTheme;
+  if ($('theme-icon-sun')) $('theme-icon-sun').hidden = nextTheme === 'light';
+  if ($('theme-icon-moon')) $('theme-icon-moon').hidden = nextTheme !== 'light';
+
+  const sidebarOpen = state.sidebar_open !== false;
+  document.body.classList.toggle('sidebar-collapsed', !sidebarOpen);
+  if ($('sidebar-toggle')) $('sidebar-toggle').setAttribute('aria-pressed', String(sidebarOpen));
+
   if (i18n && (appliedLocale !== nextLocale || appliedMode !== nextMode)) {
     i18n.setLocale(nextLocale);
     i18n.applyStatic(nextMode);
@@ -66,16 +74,37 @@ function update(state) {
   if (document.activeElement !== $('address')) $('address').value = active?.url || '';
   $('zoom').textContent = Math.round((active?.zoom || 1) * 100) + '%';
   $('tabs').replaceChildren(...state.tabs.map(tab => {
-    const item = document.createElement('div'); item.className = 'tab' + (tab.id === state.active ? ' active' : '');
-    const title = document.createElement('span'); title.textContent = tab.title; title.title = tab.url;
-    const close = document.createElement('button'); close.textContent = '×'; close.title = t('closeTabTitle');
+    const item = document.createElement('div');
+    item.className = 'tab' + (tab.id === state.active ? ' active' : '');
+    if (tab.owner || tab.collecting || tab.watching?.length) {
+      const dot = document.createElement('span');
+      dot.className = 'tab-dot';
+      item.append(dot);
+    }
+    const title = document.createElement('span');
+    title.className = 'tab-title';
+    title.textContent = tab.title;
+    title.title = tab.url;
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.textContent = '×';
+    close.title = t('closeTabTitle');
     close.onclick = event => { event.stopPropagation(); command('close', { tab_id: tab.id }); };
-    item.onclick = () => command('switch', { tab_id: tab.id }); item.append(title, close); return item;
+    item.onclick = () => command('switch', { tab_id: tab.id });
+    item.append(title, close);
+    return item;
   }));
+
+  const chip = $('state-chip');
+  if (chip) {
+    chip.className = 'state-chip' + (state.paused ? ' is-paused' : active?.owner ? ' is-agent' : '');
+    chip.textContent = state.paused ? t('statePaused') : active?.owner ? t('stateAgent') : t('stateReady');
+  }
   $('ownership').textContent = state.paused
     ? t('ownershipPaused')
     : active?.owner ? t('ownershipActive', active.owner) : t('ownershipIdle');
-  $('takeover').hidden = state.paused; $('resume').hidden = !state.paused;
+  $('takeover').hidden = state.paused;
+  $('resume').hidden = !state.paused;
 
   const clipboard = $('clipboard-write');
   clipboard.hidden = !active?.clipboard_write_available || active.clipboard_write_remembered;
@@ -92,24 +121,38 @@ function update(state) {
   for (const input of permissionInputs) input.checked = Boolean(active?.site_permissions?.[input.name]);
 
   for (const updater of extensionUpdaters) updater(state, active);
-  updateMcpConnector(state);
   if (discoveryEnabled) updateDiscovery(state);
 
   $('status').textContent = t('statusLocal', state.version);
   $('empty').hidden = state.tabs.length > 0;
   updateTabTasks(state.tabs);
+
+  const badge = $('mcp-badge');
+  if (badge) {
+    badge.hidden = !state.clients.length;
+    badge.textContent = String(state.clients.length);
+  }
+
   $('clients').replaceChildren();
   if (!state.clients.length) $('clients').textContent = t('clientsEmpty');
   for (const client of state.clients) {
-    const node = document.createElement('div'); node.className = 'client'; node.textContent = client.name; $('clients').append(node);
+    const node = document.createElement('div');
+    node.className = 'client';
+    node.textContent = client.name;
+    $('clients').append(node);
   }
+
   $('receipts').replaceChildren();
   if (!state.receipts.length) $('receipts').textContent = t('receiptsEmpty');
   for (const receipt of state.receipts.slice(-8).reverse()) {
-    const node = document.createElement('div'); node.className = 'receipt';
-    const title = document.createElement('strong'); title.textContent = receipt.tool.replace('browser_', '');
-    const detail = document.createElement('small'); detail.textContent = receipt.client + ' · ' + receipt.status;
-    node.append(title, detail); $('receipts').append(node);
+    const node = document.createElement('div');
+    node.className = 'receipt';
+    const title = document.createElement('strong');
+    title.textContent = receipt.tool.replace('browser_', '');
+    const detail = document.createElement('small');
+    detail.textContent = receipt.client + ' · ' + receipt.status;
+    node.append(title, detail);
+    $('receipts').append(node);
   }
 }
 
@@ -125,6 +168,20 @@ $('takeover').onclick = () => command('pause');
 $('resume').onclick = () => command('resume');
 $('clipboard-write').onclick = () => command('toggle-clipboard', { tab_id: current.active });
 $('clipboard-site').onclick = () => command('toggle-site-clipboard', { tab_id: current.active });
+
+const openMcp = () => command('mcp-connector-open');
+for (const id of ['mcp-toggle', 'mcp-open-from-card', 'mcp-open-from-clients']) {
+  if ($(id)) $(id).onclick = openMcp;
+}
+if ($('theme-toggle')) {
+  $('theme-toggle').onclick = () => {
+    const next = (current?.theme || 'dark') === 'dark' ? 'light' : 'dark';
+    command('set-theme', { theme: next });
+  };
+}
+if ($('sidebar-toggle')) {
+  $('sidebar-toggle').onclick = () => command('toggle-sidebar');
+}
 if ($('lang-toggle')) {
   $('lang-toggle').onclick = () => {
     const next = (current?.locale || 'zh-CN') === 'zh-CN' ? 'en' : 'zh-CN';

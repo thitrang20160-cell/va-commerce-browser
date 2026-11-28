@@ -8,9 +8,9 @@ import { BrowserEngine, installEditMenu } from './engine.js';
 import { startService } from './service.js';
 import { installSitePermissions } from './site-permissions.js';
 import { resolveDataDir, resolveDownloadDir } from './paths.js';
-import { resolveLocale, saveLocale } from './i18n.js';
+import { resolveLocale, resolveTheme, saveLocale, saveTheme } from './i18n.js';
 import { createPluginHost, loadOptionalExtensionModule, resolveMode } from './plugins/index.js';
-import { inspectMcpConnector, installMcpClient } from './mcp-connector.js';
+import { inspectMcpConnector, installMcpClient, uninstallMcpClient } from './mcp-connector.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 function argument(name) {
@@ -26,6 +26,7 @@ if (process.platform === 'win32') app.setAppUserModelId(process.execPath);
 if (!app.requestSingleInstanceLock()) app.quit();
 
 let window;
+let mcpModal = null;
 let engine;
 let service;
 let relay;
@@ -39,6 +40,62 @@ function saveTabs() {
     urls: tabs.map(t => t.view.webContents.getURL()),
     active_index: tabs.findIndex(t => t.id === engine.active),
   }), { mode: 0o600 });
+}
+
+function buildConnectorInfo() {
+  return inspectMcpConnector({
+    mode,
+    locale: engine?.locale || 'zh-CN',
+    theme: engine?.theme || 'dark',
+    projectRoot: path.dirname(here),
+    endpoint: service ? 'http://127.0.0.1:' + service.port : null,
+    toolCount: engine ? engine.toolDefinitions().length : 0,
+    dataDir,
+    activeClients: engine ? [...engine.clients.keys()] : [],
+  });
+}
+
+function openMcpModal() {
+  if (!window || window.isDestroyed()) return { open: false };
+  if (mcpModal && !mcpModal.isDestroyed()) {
+    mcpModal.show();
+    mcpModal.focus();
+    return { open: true };
+  }
+  const modalWidth = 860;
+  const modalHeight = 724;
+  const parentBounds = window.getBounds();
+  const x = Math.round(parentBounds.x + (parentBounds.width - modalWidth) / 2);
+  const y = Math.round(parentBounds.y + (parentBounds.height - modalHeight) / 2);
+
+  mcpModal = new BrowserWindow({
+    parent: window,
+    modal: true,
+    width: modalWidth,
+    height: modalHeight,
+    x,
+    y,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    frame: false,
+    show: false,
+    backgroundColor: engine?.theme === 'light' ? '#ffffff' : '#0d131a',
+    webPreferences: {
+      preload: path.join(here, 'preload.cjs'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+  mcpModal.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  mcpModal.webContents.on('will-navigate', event => event.preventDefault());
+  mcpModal.once('ready-to-show', () => {
+    if (mcpModal && !mcpModal.isDestroyed()) mcpModal.show();
+  });
+  mcpModal.on('closed', () => { mcpModal = null; });
+  void mcpModal.loadFile(path.join(here, 'ui', 'mcp-modal.html'));
+  return { open: true };
 }
 
 app.on('second-instance', () => { window?.restore(); window?.focus(); });
@@ -60,6 +117,7 @@ app.whenReady().then(async () => {
   }
 
   const locale = resolveLocale({ explicitLang: argument('--lang'), dataDir });
+  const theme = resolveTheme({ explicitTheme: argument('--theme'), dataDir });
   const downloadDir = resolveDownloadDir({
     explicitDir: argument('--download-dir'),
     electronDownloads: app.getPath('downloads'),
@@ -68,8 +126,8 @@ app.whenReady().then(async () => {
 
   window = new BrowserWindow({
     title: mode === 'oss' ? 'VA Commerce Browser' : packageInfo.productName,
-    width: 1400, height: 940, minWidth: 960, minHeight: 640,
-    backgroundColor: '#eef2f3', autoHideMenuBar: true,
+    width: 1420, height: 940, minWidth: 980, minHeight: 640,
+    backgroundColor: theme === 'light' ? '#f4f7f9' : '#0b0f14', autoHideMenuBar: true,
     webPreferences: { preload: path.join(here, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true },
   });
 
@@ -80,7 +138,7 @@ app.whenReady().then(async () => {
 
   engine = new BrowserEngine(window, dataDir, state => {
     if (!window.isDestroyed()) window.webContents.send('browser-state', state);
-  }, { mode, locale, plugins, sellerStar: extensionContext.sellerStar ?? null });
+  }, { mode, locale, theme, plugins, sellerStar: extensionContext.sellerStar ?? null });
 
   window.on('resize', () => engine.layout());
   window.on('close', saveTabs);
@@ -88,38 +146,38 @@ app.whenReady().then(async () => {
   window.webContents.on('will-navigate', event => event.preventDefault());
   installEditMenu(window, window.webContents, () => true, () => engine.locale);
 
+  const MODAL_ALLOWED_COMMANDS = new Set([
+    'mcp-connector-info',
+    'mcp-connector-install',
+    'mcp-connector-uninstall',
+    'mcp-connector-copy',
+    'mcp-connector-open-demo',
+    'mcp-connector-close',
+  ]);
+
   ipcMain.handle('browser-ui', async (event, command, payload = {}) => {
-    if (event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame) {
+    const isMainSender = event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame;
+    const isModalSender = Boolean(mcpModal && !mcpModal.isDestroyed() &&
+      event.sender === mcpModal.webContents && event.senderFrame === mcpModal.webContents.mainFrame);
+    if (!isMainSender && !(isModalSender && MODAL_ALLOWED_COMMANDS.has(command))) {
       throw new Error('Invalid UI sender');
     }
-    if (command === 'state') return engine.state();
-    if (command === 'pause') { engine.pause(); return engine.state(); }
-    if (command === 'resume') { engine.resume(); return engine.state(); }
-    if (command === 'set-locale') {
-      engine.locale = saveLocale(dataDir, payload.locale);
-      engine.emit();
-      return engine.state();
+
+    if (command === 'mcp-connector-open') return openMcpModal();
+    if (command === 'mcp-connector-close') {
+      if (mcpModal && !mcpModal.isDestroyed()) mcpModal.close();
+      return { closed: true };
     }
-    if (command === 'mcp-connector-info') {
-      return inspectMcpConnector({
-        mode,
-        projectRoot: path.dirname(here),
-        endpoint: service ? 'http://127.0.0.1:' + service.port : null,
-        toolCount: engine.toolDefinitions().length,
-        dataDir,
-      });
-    }
+    if (command === 'mcp-connector-info') return buildConnectorInfo();
     if (command === 'mcp-connector-install') {
       const clientId = String(payload?.client || '');
       const result = installMcpClient({ client: clientId, mode, projectRoot: path.dirname(here) });
-      const info = inspectMcpConnector({
-        mode,
-        projectRoot: path.dirname(here),
-        endpoint: service ? 'http://127.0.0.1:' + service.port : null,
-        toolCount: engine.toolDefinitions().length,
-        dataDir,
-      });
-      return { ...result, info };
+      return { ...result, info: buildConnectorInfo() };
+    }
+    if (command === 'mcp-connector-uninstall') {
+      const clientId = String(payload?.client || '');
+      const result = uninstallMcpClient({ client: clientId, mode, projectRoot: path.dirname(here) });
+      return { ...result, info: buildConnectorInfo() };
     }
     if (command === 'mcp-connector-copy') {
       clipboard.writeText(String(payload?.text || ''));
@@ -128,6 +186,27 @@ app.whenReady().then(async () => {
     if (command === 'mcp-connector-open-demo') {
       if (!service) throw new Error('Local service not ready');
       return engine.newTab('http://127.0.0.1:' + service.port + '/demo').then(t => engine.describe(t));
+    }
+
+    if (command === 'state') return engine.state();
+    if (command === 'pause') { engine.pause(); return engine.state(); }
+    if (command === 'resume') { engine.resume(); return engine.state(); }
+    if (command === 'set-locale') {
+      engine.locale = saveLocale(dataDir, payload.locale);
+      engine.emit();
+      return engine.state();
+    }
+    if (command === 'set-theme') {
+      engine.theme = saveTheme(dataDir, payload.theme);
+      window.setBackgroundColor(engine.theme === 'light' ? '#f4f7f9' : '#0b0f14');
+      engine.emit();
+      return engine.state();
+    }
+    if (command === 'toggle-sidebar') {
+      engine.sidebarOpen = typeof payload.open === 'boolean' ? payload.open : !engine.sidebarOpen;
+      engine.layout();
+      engine.emit();
+      return engine.state();
     }
     if (command === 'new') return engine.newTab(payload.url || 'about:blank').then(t => engine.describe(t));
 
@@ -199,6 +278,7 @@ app.whenReady().then(async () => {
   if (!engine.tabs.size) await engine.newTab('http://127.0.0.1:' + service.port + '/demo');
   engine.emit();
   if (process.argv.includes('--test-minimize')) window.minimize();
+  if (process.argv.includes('--open-mcp-modal')) setTimeout(() => openMcpModal(), 250);
 }).catch(error => {
   fs.appendFileSync(path.join(dataDir, 'startup-error.log'), new Date().toISOString() + ' ' + error.stack + '\n');
   app.quit();
@@ -206,6 +286,7 @@ app.whenReady().then(async () => {
 
 app.on('window-all-closed', () => app.quit());
 app.on('before-quit', () => {
+  if (mcpModal && !mcpModal.isDestroyed()) mcpModal.destroy();
   relay?.close();
   engine?.watches.endAll('browser_closed');
   engine?.plugins.onBeforeQuit(engine);

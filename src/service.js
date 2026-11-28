@@ -7,18 +7,30 @@ import packageInfo from '../package.json' with { type: 'json' };
 
 export const DEMO = `<!doctype html><html lang="zh-CN"><meta charset="utf-8">
 <title>浏览器连接验证</title><style>
-body{margin:0;background:#f4f6f8;color:#18313b;font:17px "Segoe UI","Microsoft YaHei",sans-serif}
-main{max-width:780px;margin:55px auto;background:white;padding:40px;border-radius:20px}
-h1{font-size:32px}label{display:block;margin:20px 0 8px}input,select,button,textarea{font:inherit;padding:12px;border:1px solid #bbc9d0;border-radius:8px}
-button{background:#145e67;color:white;cursor:pointer}#result{padding:20px;background:#eef7f5;margin-top:24px}small{color:#547078}</style>
-<main><small>VA电商浏览器 AI版 · 本地验证页</small><h1>从这里开始连接 Agent</h1>
-<p>这是本机示例表单。Agent 可以读取、填写、点击，并核对生成的回执。</p>
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;background:radial-gradient(ellipse 80% 55% at 50% 0%,rgba(45,212,191,.13),transparent 65%),#0b1016;color:#e8f1f5;font:15px Inter,"Segoe UI Variable","Microsoft YaHei UI",sans-serif;padding:42px 20px}
+main{max-width:740px;margin:0 auto;background:#121922;border:1px solid rgba(255,255,255,.09);padding:34px 36px;border-radius:18px;box-shadow:0 24px 60px rgba(0,0,0,.4)}
+.eyebrow{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;background:rgba(45,212,191,.12);border:1px solid rgba(45,212,191,.35);color:#2dd4bf;font:600 11.5px "JetBrains Mono",Consolas,monospace;margin-bottom:12px}
+h1{font-size:28px;margin:0 0 8px;letter-spacing:-.5px;color:#f5fafc}
+p.lead{color:#8fa6b2;margin:0 0 24px;line-height:1.6}
+label{display:block;margin:16px 0 6px;font-size:13px;font-weight:600;color:#c2d4dc}
+input,select,textarea{width:100%;font:inherit;padding:10px 13px;border:1px solid rgba(255,255,255,.12);border-radius:10px;background:#0a0f14;color:#eef5f8}
+input:focus,select:focus,textarea:focus{outline:2px solid #2dd4bf;outline-offset:1px;border-color:#2dd4bf}
+button{font:inherit;padding:10px 18px;border-radius:10px;border:1px solid #14b8a6;background:linear-gradient(135deg,#14b8a6,#0d8a81);color:#032221;font-weight:700;cursor:pointer}
+button:hover{filter:brightness(1.08)}
+button:disabled{background:#18222d;border-color:rgba(255,255,255,.08);color:#5d7380;cursor:not-allowed}
+#result{padding:14px 16px;border-radius:10px;background:rgba(45,212,191,.1);border:1px solid rgba(45,212,191,.3);color:#99f6e4;margin-top:20px;font-family:"JetBrains Mono",Consolas,monospace;font-size:13px}
+.foot{display:flex;align-items:center;justify-content:space-between;margin-top:18px;padding-top:16px;border-top:1px solid rgba(255,255,255,.08)}
+a{color:#2dd4bf;text-decoration:none;font-weight:600}a:hover{text-decoration:underline}
+</style>
+<main><small class="eyebrow">VA电商浏览器 AI版 · 本地验证页</small><h1>从这里开始连接 Agent</h1>
+<p class="lead">这是本机示例表单。Agent 可以读取、填写、点击，并核对生成的回执。</p>
 <form id="form"><label for="name">项目名称</label><input id="name" name="name" placeholder="填写一个测试项目">
 <label for="kind">任务类型</label><select id="kind"><option value="research">资料整理</option><option value="listing">商品信息</option></select>
 <label for="notes">任务说明</label><textarea id="notes" rows="2"></textarea>
 <label for="upload">示例附件</label><input type="file" id="upload"><p><button id="save">保存本地任务</button></p></form>
-<div id="result" role="status">尚未保存</div><p><a href="/demo/download" download>下载示例回执</a></p>
-<button disabled>不可操作的按钮</button>
+<div id="result" role="status">尚未保存</div><div class="foot"><a href="/demo/download" download>下载示例回执</a>
+<button disabled>不可操作的按钮</button></div>
 <script>
 let saves=0;
 document.querySelector('#form').addEventListener('submit',e=>{e.preventDefault();saves++;

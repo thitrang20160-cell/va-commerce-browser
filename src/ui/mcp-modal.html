@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:">
+  <title>MCP Connectors</title>
+  <link rel="stylesheet" href="mcp-modal.css">
+</head>
+<body>
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <header class="dialog-header">
+      <div class="header-left">
+        <div class="header-icon" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/>
+          </svg>
+        </div>
+        <div>
+          <div class="title-row">
+            <h1 id="modal-title">MCP 连接器</h1>
+            <span id="live-pill" class="live-pill">127.0.0.1</span>
+          </div>
+          <p id="modal-subtitle" class="subtitle">将浏览器一键接入本地 AI 客户端，共享真实登录态与后台标签页</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button id="btn-refresh" class="icon-btn" type="button" title="刷新状态">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>
+          </svg>
+        </button>
+        <button id="btn-close" class="icon-btn close-btn" type="button" aria-label="关闭">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <div class="toolbar">
+      <div class="tabs" role="tablist">
+        <button id="tab-all" class="tab-pill active" type="button" role="tab" aria-selected="true">全部客户端 <span id="count-all" class="tab-count">6</span></button>
+        <button id="tab-connected" class="tab-pill" type="button" role="tab" aria-selected="false">已配置 <span id="count-connected" class="tab-count">0</span></button>
+        <button id="tab-manual" class="tab-pill" type="button" role="tab" aria-selected="false">自定义 / 手动配置</button>
+      </div>
+      <div id="search-wrap" class="search-box">
+        <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+        </svg>
+        <input id="search-input" type="search" placeholder="搜索客户端…" autocomplete="off">
+      </div>
+    </div>
+
+    <main class="dialog-body">
+      <div id="view-grid" class="connector-grid"></div>
+      <div id="view-empty" class="empty-state" hidden></div>
+
+      <div id="view-manual" class="manual-view" hidden>
+        <section class="manual-card">
+          <div class="manual-head">
+            <div>
+              <h2 id="manual-codex-title">Codex CLI 注册命令</h2>
+              <p id="manual-codex-desc" class="muted">在终端执行下方命令即可将浏览器添加到 Codex 的 MCP 列表。</p>
+            </div>
+            <button id="btn-copy-codex" class="btn-primary-sm" type="button">复制命令</button>
+          </div>
+          <pre id="code-codex" class="code-block"></pre>
+        </section>
+
+        <section class="manual-card">
+          <div class="manual-head">
+            <div>
+              <h2 id="manual-json-title">通用 MCP stdio 配置 (JSON)</h2>
+              <p id="manual-json-desc" class="muted">适用于任何支持标准 MCP stdio 协议的客户端，直接粘贴到 mcpServers 中。</p>
+            </div>
+            <button id="btn-copy-json" class="btn-outline-sm" type="button">复制 JSON</button>
+          </div>
+          <pre id="code-json" class="code-block"></pre>
+        </section>
+
+        <section class="manual-card manual-http-card">
+          <div class="manual-head">
+            <div>
+              <h2 id="manual-http-title">本地 Streamable HTTP 端点</h2>
+              <p id="manual-http-desc" class="muted">仅监听本机回环地址 127.0.0.1，需配合当前配置目录 runtime.json 中的本地令牌认证。</p>
+            </div>
+            <button id="btn-copy-http" class="btn-outline-sm" type="button">复制地址</button>
+          </div>
+          <div class="http-row">
+            <code id="code-http" class="http-url">http://127.0.0.1:18773/mcp</code>
+            <span id="server-name-badge" class="meta-pill">va_commerce_browser</span>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <footer class="dialog-footer">
+      <div id="footer-status" class="footer-status" role="status">修改前自动备份原配置文件 · 仅限本机 127.0.0.1 访问</div>
+      <div class="footer-actions">
+        <button id="btn-open-demo" class="btn-outline" type="button">打开连接测试页</button>
+        <button id="btn-done" class="btn-primary" type="button">完成</button>
+      </div>
+    </footer>
+  </div>
+
+  <script src="mcp-modal.js"></script>
+</body>
+</html>

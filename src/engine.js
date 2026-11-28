@@ -56,6 +56,8 @@ export class BrowserEngine {
     this.onChange = onChange;
     this.mode = options.mode === 'oss' ? 'oss' : 'internal';
     this.locale = options.locale || 'zh-CN';
+    this.theme = options.theme === 'light' ? 'light' : 'dark';
+    this.sidebarOpen = true;
     this.plugins = options.plugins instanceof PluginHost ? options.plugins : new PluginHost();
     this.sellerStar = options.sellerStar ?? null;
     this.tabs = new Map();
@@ -101,6 +103,8 @@ export class BrowserEngine {
       version: packageInfo.version,
       mode: this.mode,
       locale: this.locale,
+      theme: this.theme,
+      sidebar_open: this.sidebarOpen,
       plugins: this.plugins.ids(),
       enabled_panels: this.plugins.enabledPanels(),
       paused: this.paused,
@@ -267,8 +271,10 @@ export class BrowserEngine {
 
   layout() {
     const [width, height] = this.window.getContentSize();
+    const sidebarWidth = this.sidebarOpen ? 316 : 0;
+    const topChrome = 96;
     for (const t of this.tabs.values()) {
-      t.view.setBounds({ x: 0, y: 110, width: Math.max(300, width - 290), height: Math.max(160, height - 110) });
+      t.view.setBounds({ x: 0, y: topChrome, width: Math.max(300, width - sidebarWidth), height: Math.max(160, height - topChrome) });
     }
   }
 

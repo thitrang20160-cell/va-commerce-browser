@@ -51,6 +51,39 @@ export function resolveLocale({ explicitLang = null, dataDir = null } = {}) {
   return normalizeLocale(explicitLang) || loadSavedLocale(dataDir) || detectSystemLocale();
 }
 
+export function normalizeTheme(raw) {
+  if (raw === 'light' || raw === 'dark') return raw;
+  return null;
+}
+
+export function loadSavedTheme(dataDir) {
+  if (!dataDir) return null;
+  try {
+    const prefs = JSON.parse(fs.readFileSync(path.join(dataDir, 'ui-prefs.json'), 'utf8'));
+    return normalizeTheme(prefs?.theme);
+  } catch {
+    return null;
+  }
+}
+
+export function saveTheme(dataDir, theme) {
+  const normalized = normalizeTheme(theme);
+  if (!normalized) throw Object.assign(new Error('Unsupported theme'), { code: 'INVALID_THEME' });
+  if (!dataDir) return normalized;
+  const file = path.join(dataDir, 'ui-prefs.json');
+  let prefs = {};
+  try { prefs = JSON.parse(fs.readFileSync(file, 'utf8')); } catch {}
+  prefs.theme = normalized;
+  const tmp = file + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify(prefs, null, 2), { mode: 0o600 });
+  fs.renameSync(tmp, file);
+  return normalized;
+}
+
+export function resolveTheme({ explicitTheme = null, dataDir = null } = {}) {
+  return normalizeTheme(explicitTheme) || loadSavedTheme(dataDir) || 'dark';
+}
+
 export const MAIN_STRINGS = {
   'zh-CN': {
     newTab: '新标签页',

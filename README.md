@@ -94,12 +94,12 @@ Switch **EN / 中文** live anytime from the top toolbar (auto-detects your OS l
 
 ---
 
-## 1-Click Visual MCP Connector (Built-in UI + CLI)
+## 1-Click Visual MCP Connectors Modal (Built-in UI + CLI)
 
-Click **`MCP Connect`** right in the browser's top toolbar to:
-- View your active loopback endpoint (`127.0.0.1:<port>`) and loaded MCP tool count.
-- **One-click auto-install** (with automatic `.bak` backup) into **Claude Code**, **Cursor**, **Windsurf**, **Claude Desktop**, or **Cline** — works even from prebuilt `.exe`/`.dmg`/`.AppImage` packages without a separate Node.js install.
-- Copy the exact **Codex CLI** registration command or generic **MCP JSON** snippet in one click.
+Click **`MCP Connect`** in the top bar to open the centered **MCP Connectors** modal (with **Obsidian Dark** / **Porcelain Light** dual theme and live `EN / 中文` toggle):
+- View your active loopback endpoint (`127.0.0.1:<port>`), loaded MCP tool count, and real-time `Active / Connected` client badges.
+- **One-click Connect / Update / Disconnect** (with automatic `.bak` backup) for **Claude Code**, **Cursor**, **Windsurf**, **Claude Desktop**, and **Cline** — works even from prebuilt `.exe`/`.dmg`/`.AppImage` packages without a separate Node.js install.
+- Copy the exact **Codex CLI** registration command, generic **MCP JSON**, or `/mcp` Streamable HTTP endpoint in one click.
 
 Prefer the command line? Run the same engine via CLI:
 
