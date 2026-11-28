@@ -1,4 +1,4 @@
-# VA 电商AI浏览器 · VA Commerce Browser (`v0.7.0`)
+# VA 电商AI浏览器 · VA Commerce Browser (`v0.8.0`)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-14b8a6.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-22%2B-339933.svg)](https://nodejs.org/)
@@ -34,7 +34,7 @@ Most browser automation MCP servers force a painful trade-off: spawn disposable 
 
 **VA Commerce Browser is built for real human + multi-agent daily work:**
 
-| Capability | Playwright / Puppeteer MCP | Headless Browser-Use Agents | **VA 电商AI浏览器 (`v0.7.0`)** |
+| Capability | Playwright / Puppeteer MCP | Headless Browser-Use Agents | **VA 电商AI浏览器 (`v0.8.0`)** |
 | --- | --- | --- | --- |
 | **Persistent visible browser & real logins** | Ephemeral headless by default | Requires manual CDP attach | **Dedicated Electron desktop browser with persistent real profile** |
 | **Zero-disruption background execution** | Disrupts / steals active view | No interactive daily browsing shell | **Background tabs render off-top (`108/108` checks, `0` focus shifts)** |

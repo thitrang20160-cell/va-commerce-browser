@@ -1,6 +1,8 @@
 function bindSopStudio($, command) {
   let state = null;
   let busyTeardown = false;
+  let busySafeSell = false;
+  let busySellerLens = false;
   let busy1688 = false;
   let lastSavedTimer = null;
 
@@ -8,10 +10,19 @@ function bindSopStudio($, command) {
   const hasSellerStar = () => Array.isArray(state?.enabled_panels) && state.enabled_panels.includes('sellerstar-batch');
   const sop = () => state?.sop || { mode: hasSellerStar() ? 'distribution' : 'boutique', distribution: {}, boutique: { items: [] } };
 
-  const BOUTIQUE_STEPS_ZH = ['① 赛道初筛', '② 竞品拆解', '③ 侵权闸门', '④ 1688利润', '⑤ 立项包'];
-  const BOUTIQUE_STEPS_EN = ['1. Screen', '2. Teardown', '3. IP Gate', '4. Profit', '5. Brief'];
-  const DIST_STEPS_ZH = ['① 批量扫品', '② 查重风控', '③ 画廊勾选', '④ 入塞星上架'];
-  const DIST_STEPS_EN = ['1. Scan', '2. Guardrails', '3. Gallery', '4. Push Box'];
+  const BOUTIQUE_STEPS = [
+    { zh: '① 赛道初筛', en: '1. Screen', target: () => document.querySelector('#product-discovery .composer-card') },
+    { zh: '② SellerLens分析', en: '2. SellerLens', target: () => $('bt-step-2') || $('boutique-sop-card') },
+    { zh: '③ 侵权全查', en: '3. SafeSellAI IP', target: () => $('bt-step-3') || $('boutique-sop-card') },
+    { zh: '④ 1688寻源', en: '4. 1688 Source', target: () => $('bt-step-4') || $('boutique-sop-card') },
+    { zh: '⑤ 立项包', en: '5. Brief', target: () => $('bt-step-5') || $('boutique-sop-card') },
+  ];
+  const DIST_STEPS = [
+    { zh: '① 批量扫品', en: '1. Scan', target: () => document.querySelector('#product-discovery .composer-card') },
+    { zh: '② 查重风控', en: '2. Guardrails', target: () => $('distribution-sop-card') },
+    { zh: '③ 画廊勾选', en: '3. Gallery', target: () => $('discovery-ranked') || $('distribution-sop-card') },
+    { zh: '④ 入塞星上架', en: '4. Push ERP', target: () => $('distribution-sop-card') },
+  ];
 
   const BOUTIQUE_PRESETS_ZH = [
     { label: '厨房微创新 $20–45', prompt: '厨房硅胶防漏垫，售价 $20-45，FBA，评论小于 1500', kw: 'silicone under sink mat' },
@@ -24,25 +35,35 @@ function bindSopStudio($, command) {
     { label: '车载配件 $15–35', prompt: '车载收纳配件，售价 $15-35，FBA', kw: 'car seat gap filler organizer' },
   ];
 
+  function jumpToStep(stepDef) {
+    const target = stepDef.target?.();
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      target.classList.add('step-flash');
+      setTimeout(() => target.classList.remove('step-flash'), 900);
+    }
+  }
+
   function renderStepper(mode, activeStepIndex) {
     const el = $('sop-stepper');
     if (!el) return;
-    const labels = mode === 'boutique'
-      ? (isEn() ? BOUTIQUE_STEPS_EN : BOUTIQUE_STEPS_ZH)
-      : (isEn() ? DIST_STEPS_EN : DIST_STEPS_ZH);
-    el.replaceChildren(...labels.map((text, idx) => {
-      const chip = document.createElement('span');
-      chip.className = 'sop-step' + (idx < activeStepIndex ? ' is-done' : idx === activeStepIndex ? ' is-now' : '');
-      chip.textContent = text;
-      return chip;
+    const defs = mode === 'boutique' ? BOUTIQUE_STEPS : DIST_STEPS;
+    el.replaceChildren(...defs.map((def, idx) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'sop-step' + (idx < activeStepIndex ? ' is-done' : idx === activeStepIndex ? ' is-now' : '');
+      btn.textContent = isEn() ? def.en : def.zh;
+      btn.title = isEn() ? 'Click to jump to this step' : '点击直达此步骤';
+      btn.onclick = () => jumpToStep(def);
+      return btn;
     }));
   }
 
   function calcActiveBoutiqueStep(item) {
     if (!item) return 0;
-    if (!item.teardown || item.teardown.status !== 'ok') return 1;
+    if (!item.sellerlens && (!item.teardown || item.teardown.status !== 'ok')) return 1;
     if (!item.compliance || item.compliance.status === 'pending') return 2;
-    if (!item.profit || !(Number(item.profit.cost_cny) > 0)) return 3;
+    if (!item.sourcing_handoff && !(Number(item.profit?.cost_cny) > 0)) return 3;
     return 4;
   }
 
@@ -122,6 +143,14 @@ function bindSopStudio($, command) {
     }, 280);
   }
 
+  const DIM_LABELS = {
+    trademark_text: '商标+TRO',
+    utility_patent: '发明专利',
+    design_patent: '外观专利',
+    copyright: '版权图库',
+    trademark_vision: '图形商标',
+  };
+
   function renderBoutiqueCard() {
     const card = $('boutique-sop-card');
     if (!card) return;
@@ -159,7 +188,6 @@ function bindSopStudio($, command) {
         rm.type = 'button';
         rm.className = 'bt-pill-rm';
         rm.textContent = '×';
-        rm.title = isEn() ? 'Remove' : '移出立项单';
         rm.onclick = e => { e.stopPropagation(); command('sop-boutique-remove', { asin: item.asin }); };
         pill.append(code, rm);
         return pill;
@@ -170,6 +198,8 @@ function bindSopStudio($, command) {
     $('boutique-detail').hidden = !active;
     if (!active) return;
 
+    const setMsg = text => { if ($('bt-status-msg')) $('bt-status-msg').textContent = text; };
+
     // Header
     const thumb = $('bt-active-img');
     if (active.image) { thumb.src = active.image; thumb.hidden = false; }
@@ -178,70 +208,157 @@ function bindSopStudio($, command) {
     $('bt-active-meta').textContent = `${active.asin}${active.price != null ? ' · $' + Number(active.price).toFixed(2) : ''}${active.rating != null ? ' · ★' + active.rating : ''}`;
     $('bt-open-url').onclick = () => command('new', { url: active.url });
 
-    // Step 2: Teardown
-    const tdBtn = $('bt-run-teardown');
-    tdBtn.disabled = busyTeardown || Boolean(state?.paused);
-    tdBtn.textContent = busyTeardown
-      ? (isEn() ? 'Analyzing…' : '后台拆解中…')
-      : active.teardown?.status === 'ok'
-        ? (isEn() ? '↻ Re-run Teardown' : '↻ 重新拆解竞品')
-        : (isEn() ? '② Background Competitor Teardown' : '② 一键后台拆解（卖点+差评+视频）');
-    tdBtn.onclick = async () => {
-      if (busyTeardown) return;
-      busyTeardown = true;
-      renderBoutiqueCard();
-      try {
-        const res = await command('sop-boutique-teardown', { asin: active.asin });
-        if (res?.teardown?.status && res.teardown.status !== 'ok') {
-          $('bt-status-msg').textContent = res.teardown.status === 'verification_required'
-            ? '亚马逊触发验证，请先点「打开商品页」人工过验证后重试。'
-            : '未能读取详情页，请打开商品页检查。';
-        } else {
-          $('bt-status-msg').textContent = '✓ 竞品拆解完成：已提取卖点、变体、视频信号及中差评痛点。';
-        }
-      } finally {
-        busyTeardown = false;
+    // Step 2: SellerLens Market Analysis (primary) + lightweight page reader
+    const slBtn = $('bt-run-sellerlens');
+    if (slBtn) {
+      slBtn.disabled = busySellerLens;
+      slBtn.textContent = busySellerLens
+        ? (isEn() ? 'Calling SellerLens…' : '正在调用 SellerLens 引擎…')
+        : active.sellerlens
+          ? (isEn() ? '↻ Refresh SellerLens Analysis' : '↻ 重新调用 SellerLens 分析')
+          : (isEn() ? '🔍 Run SellerLens Market Analysis' : '🔍 调用 SellerLens 市场评分 & 趋势');
+      slBtn.onclick = async () => {
+        if (busySellerLens) return;
+        busySellerLens = true;
         renderBoutiqueCard();
+        setMsg('正在连接 SellerLens（市场评分 + ABA/趋势）…');
+        try {
+          const res = await command('sop-sellerlens-analyze', { asin: active.asin });
+          if (res?.sellerlens) setMsg(`✓ SellerLens 分析完成（来源：${res.sellerlens.source}）。`);
+        } finally {
+          busySellerLens = false;
+          renderBoutiqueCard();
+        }
+      };
+    }
+
+    const slBox = $('bt-sellerlens-result');
+    const sl = active.sellerlens;
+    if (slBox && sl) {
+      slBox.hidden = false;
+      const v = String(sl.ai_verdict || sl.tier || '已分析').toUpperCase();
+      const vEl = $('bt-sl-verdict');
+      vEl.textContent = v;
+      vEl.className = 'hub-badge ' + (/GO|A|S/.test(v) && !/NO/.test(v) ? 'is-ok' : /NO|D|REJECT/.test(v) ? 'is-bad' : 'is-warn');
+      $('bt-sl-score').textContent = [
+        sl.composite_score != null ? `评分 ${sl.composite_score}` : null,
+        sl.tier ? `Tier ${sl.tier}` : null,
+        sl.aba_rank ? `ABA #${sl.aba_rank}` : null,
+      ].filter(Boolean).join(' · ');
+      $('bt-sl-headline').textContent = sl.ai_headline || sl.profit_gate_reason || '';
+      const slOpen = $('bt-sl-open');
+      if (slOpen) {
+        slOpen.hidden = !sl.portal_url;
+        slOpen.onclick = () => command('new', { url: sl.portal_url });
       }
-    };
+      const tags = [sl.trend_label, ...(sl.risk_flags || []).slice(0, 3)].filter(Boolean);
+      $('bt-sl-tags').replaceChildren(...tags.map(txt => Object.assign(document.createElement('span'), { className: 'bt-pain-tag', textContent: txt })));
+    } else if (slBox) {
+      slBox.hidden = true;
+    }
+
+    const tdBtn = $('bt-run-teardown');
+    if (tdBtn) {
+      tdBtn.disabled = busyTeardown || Boolean(state?.paused);
+      tdBtn.textContent = busyTeardown ? '读取中…' : (active.teardown?.status === 'ok' ? '↻ 重读本页' : '读取本页基础信息');
+      tdBtn.onclick = async () => {
+        if (busyTeardown) return;
+        busyTeardown = true;
+        renderBoutiqueCard();
+        try {
+          const res = await command('sop-boutique-teardown', { asin: active.asin });
+          setMsg(res?.teardown?.status === 'ok' ? '✓ 已读取商品详情、变体数及视频信号。' : '未能读取页面，请先打开商品页检查。');
+        } finally {
+          busyTeardown = false;
+          renderBoutiqueCard();
+        }
+      };
+    }
 
     const tdBox = $('bt-teardown-result');
     const td = active.teardown;
-    if (td && td.status === 'ok') {
+    if (tdBox && td && td.status === 'ok') {
       tdBox.hidden = false;
-      $('bt-td-facts').textContent = [
-        td.brand ? `品牌: ${td.brand}` : null,
-        `变体: ${td.variant_count || 1}`,
-        td.has_video ? '🎬 含主图视频' : '无主图视频',
-      ].filter(Boolean).join(' · ');
-
+      $('bt-td-facts').textContent = [td.brand ? `品牌: ${td.brand}` : null, `变体: ${td.variant_count || 1}`, td.has_video ? '🎬 含主图视频' : '无主图视频'].filter(Boolean).join(' · ');
       const pains = td.pain_points?.themes || [];
-      const painEl = $('bt-td-pains');
-      if (pains.length) {
-        painEl.replaceChildren(...pains.map(p => {
-          const span = document.createElement('span');
-          span.className = 'bt-pain-tag';
-          span.textContent = `${isEn() ? p.en : p.label} (${p.hits})`;
-          return span;
-        }));
-      } else {
-        painEl.replaceChildren(Object.assign(document.createElement('span'), {
-          className: 'bt-muted-tag',
-          textContent: isEn() ? 'No critical review keywords on main page' : '首屏未命中高频差评痛点词（可打开详情页翻看全部差评）',
-        }));
-      }
-
-      const bList = $('bt-td-bullets');
-      bList.replaceChildren(...(td.bullets || []).slice(0, 5).map(b => {
-        const li = document.createElement('li');
-        li.textContent = b;
-        return li;
-      }));
-    } else {
+      $('bt-td-pains').replaceChildren(...pains.map(p => Object.assign(document.createElement('span'), { className: 'bt-pain-tag', textContent: `${p.label} (${p.hits})` })));
+      $('bt-td-bullets').replaceChildren(...(td.bullets || []).slice(0, 5).map(b => Object.assign(document.createElement('li'), { textContent: b })));
+    } else if (tdBox) {
       tdBox.hidden = true;
     }
 
-    // Step 3: Compliance Gate
+    // Step 3: SafeSellAI Patent / Trademark / Copyright Full Check
+    const ipBtn = $('bt-run-safesell');
+    if (ipBtn) {
+      ipBtn.disabled = busySafeSell;
+      ipBtn.textContent = busySafeSell
+        ? (isEn() ? 'Scanning via SafeSellAI…' : '🛡️ SafeSellAI 侵权全查中（含图搜约 6–15s）…')
+        : active.ip_report
+          ? (isEn() ? '↻ Re-run SafeSellAI IP Check' : '🛡️ 重新调用 SafeSellAI 侵权全查')
+          : (isEn() ? '🛡️ Run SafeSellAI IP Full Check' : '🛡️ 一键 SafeSellAI 专利/商标/版权全查');
+      ipBtn.onclick = async () => {
+        if (busySafeSell) return;
+        const dims = {
+          text: $('ip-dim-text') ? $('ip-dim-text').checked : true,
+          design: $('ip-dim-design') ? $('ip-dim-design').checked : true,
+          copyright: $('ip-dim-copyright') ? $('ip-dim-copyright').checked : true,
+          vision: $('ip-dim-vision') ? $('ip-dim-vision').checked : true,
+        };
+        busySafeSell = true;
+        renderBoutiqueCard();
+        setMsg('正在调用 SafeSellAI 引擎排查商标/TRO/外观专利/版权…');
+        try {
+          const res = await command('sop-ip-check', { asin: active.asin, dims });
+          if (res?.report) {
+            setMsg(`✓ SafeSellAI 全查完成：${res.report.verdict}${res.report.charged_scoin ? `（消耗 ${res.report.charged_scoin} S算力）` : ''}。`);
+          }
+        } finally {
+          busySafeSell = false;
+          renderBoutiqueCard();
+        }
+      };
+    }
+
+    const ipBox = $('bt-safesell-result');
+    const ip = active.ip_report;
+    if (ipBox && ip) {
+      ipBox.hidden = false;
+      const vEl = $('bt-ip-verdict');
+      vEl.textContent = ip.verdict || '—';
+      vEl.className = 'hub-badge ' + (ip.verdict === '可上' ? 'is-ok' : ip.verdict === '命中风险' ? 'is-bad' : 'is-warn');
+      $('bt-ip-source').textContent = (ip.source === 'safesellai_mcp' ? 'SafeSellAI MCP' : '塞星·SafeSellAI')
+        + (ip.charged_scoin ? ` · ${ip.charged_scoin} S` : '');
+
+      const dimPills = Object.entries(ip.dims || {}).map(([k, v]) => {
+        const span = document.createElement('span');
+        const ok = v.scanned && !v.hit_count;
+        const bad = v.scanned && v.hit_count > 0;
+        span.className = 'ip-dim-pill ' + (bad ? 'is-bad' : ok ? 'is-ok' : 'is-unscanned');
+        span.textContent = `${DIM_LABELS[k] || k}: ${!v.scanned ? '未查成' : v.hit_count > 0 ? `${v.hit_count}命中` : '未命中'}`;
+        return span;
+      });
+      $('bt-ip-dim-pills').replaceChildren(...dimPills);
+
+      const hitNodes = [];
+      for (const h of (ip.hits || []).slice(0, 5)) {
+        const div = document.createElement('div');
+        div.className = 'hub-hit-row' + (h.isTro ? ' is-tro' : '');
+        div.textContent = `${h.isTro ? '🚨 TRO ' : '⚠ '}${h.word} · ${h.risk || h.reason || ''}`;
+        hitNodes.push(div);
+      }
+      for (const r of (ip.refs || []).slice(0, 5)) {
+        const div = document.createElement('div');
+        div.className = 'hub-hit-row';
+        div.textContent = `[${r.dim}] ${r.label}${r.owner ? ' · ' + r.owner : ''}${r.similarity ? ' (' + Math.round(r.similarity * 100) + '%)' : ''}`;
+        hitNodes.push(div);
+      }
+      $('bt-ip-hits').replaceChildren(...hitNodes);
+      $('bt-ip-caveat').textContent = ip.caveat || '';
+    } else if (ipBox) {
+      ipBox.hidden = true;
+    }
+
+    // Manual override compliance controls
     const comp = active.compliance || { status: 'pending', checks: [], note: '' };
     for (const st of ['pending', 'passed', 'rejected']) {
       const btn = $('bt-ip-' + st);
@@ -252,10 +369,9 @@ function bindSopStudio($, command) {
         patch: { compliance: { ...comp, status: st } },
       });
     }
-    const checkList = ['商标', '外观专利', '类目认证'];
     const checksWrap = $('bt-ip-checks');
     if (checksWrap) {
-      checksWrap.replaceChildren(...checkList.map(label => {
+      checksWrap.replaceChildren(...['商标', '外观专利', '版权', '图形商标'].map(label => {
         const btn = document.createElement('button');
         btn.type = 'button';
         const on = (comp.checks || []).includes(label);
@@ -269,38 +385,51 @@ function bindSopStudio($, command) {
       }));
     }
 
-    // Step 4: 1688 Sourcing + Live Profit Calculator
-    $('bt-jump-1688').onclick = () => command('sop-boutique-source-1688', { asin: active.asin });
-    const read1688Btn = $('bt-read-1688');
-    if (read1688Btn) {
-      read1688Btn.hidden = !hasSellerStar();
-      read1688Btn.disabled = busy1688;
-      read1688Btn.onclick = async () => {
+    // Step 4: 1688 Sourcing Handoff (reuse SellerStar / 1688 Skill / MCP)
+    const handoffBtn = $('bt-handoff-1688');
+    if (handoffBtn) {
+      handoffBtn.disabled = busy1688;
+      handoffBtn.onclick = async () => {
+        if (busy1688) return;
         busy1688 = true;
-        read1688Btn.disabled = true;
+        handoffBtn.disabled = true;
+        setMsg('正在推送至塞星 1688 以图找货工作台…');
         try {
-          const res = await command('sop-boutique-read-1688-tab', { asin: active.asin });
-          if (res?.status === 'ok') {
-            $('bt-status-msg').textContent = `✓ 已读取 1688 报价 ¥${res.price_cny || '—'}${res.supplier ? ' · ' + res.supplier : ''}`;
-          } else {
-            $('bt-status-msg').textContent = '请先在浏览器打开一个 1688 商品详情页，再点读取报价。';
-          }
+          const res = await command('sop-1688-handoff', { asin: active.asin, mode: 'portal' });
+          if (res?.portal_url) setMsg(`✓ 已创建塞星 1688 找货任务并打开：${res.portal_url}`);
+          else if (res?.copied) setMsg('✓ ' + (res.message || '已复制 1688 Skill 找货指令。'));
+          else if (res?.source === '1688_mcp') setMsg(`✓ 已通过 1688 MCP (${res.tool}) 返回货源结果。`);
         } finally {
           busy1688 = false;
-          read1688Btn.disabled = false;
+          handoffBtn.disabled = false;
         }
       };
     }
+    const copyAgentBtn = $('bt-copy-1688-agent');
+    if (copyAgentBtn) {
+      copyAgentBtn.onclick = async () => {
+        const res = await command('sop-1688-handoff', { asin: active.asin, mode: 'agent_prompt' });
+        if (res?.copied) setMsg('✓ 已复制 1688-product-find Skill 找货指令，直接粘贴给 Claude Code / Codex 即可找同款比价。');
+      };
+    }
+    const hNote = $('bt-1688-handoff-note');
+    if (hNote) {
+      if (active.sourcing_handoff?.portal_url) {
+        hNote.hidden = false;
+        hNote.textContent = '✓ 已推送塞星 1688 工作台：' + active.sourcing_handoff.portal_url;
+      } else {
+        hNote.hidden = true;
+      }
+    }
 
+    // Quick profit calculator
     const profit = active.profit || {};
     const calc = active.profit_calc || {};
     const fields = ['sale_price_usd', 'cost_cny', 'weight_kg', 'shipping_per_kg_cny', 'fba_fee_usd', 'acos_pct'];
     for (const field of fields) {
       const input = document.querySelector(`#bt-profit-grid input[data-pfield="${field}"]`);
       if (!input) continue;
-      if (document.activeElement !== input) {
-        input.value = profit[field] ?? '';
-      }
+      if (document.activeElement !== input) input.value = profit[field] ?? '';
       input.oninput = () => {
         const nextProfit = { ...profit };
         for (const f of fields) {
@@ -310,31 +439,17 @@ function bindSopStudio($, command) {
         scheduleBoutiquePatch(active.asin, { profit: nextProfit });
       };
     }
-
     const hasCost = Number(calc.cost_cny) > 0;
     $('bt-kpi-net').textContent = hasCost ? `$${Number(calc.net_profit_usd).toFixed(2)}` : '待填采购价';
     $('bt-kpi-margin').textContent = hasCost ? `${Number(calc.net_margin_pct).toFixed(1)}%` : '—';
     $('bt-kpi-acos').textContent = hasCost ? `${Number(calc.breakeven_acos_pct).toFixed(1)}%` : '—';
     const verdictEl = $('bt-kpi-verdict');
-    if (comp.status === 'rejected') {
-      verdictEl.textContent = '❌ 侵权驳回';
-      verdictEl.className = 'bt-verdict is-bad';
-    } else if (calc.verdict === 'go' && comp.status === 'passed') {
-      verdictEl.textContent = '✅ 建议立项';
-      verdictEl.className = 'bt-verdict is-go';
-    } else if (calc.verdict === 'go') {
-      verdictEl.textContent = '🟡 利润达标';
-      verdictEl.className = 'bt-verdict is-warn';
-    } else if (calc.verdict === 'caution') {
-      verdictEl.textContent = '🟠 谨慎评估';
-      verdictEl.className = 'bt-verdict is-warn';
-    } else if (calc.verdict === 'no_go') {
-      verdictEl.textContent = '🔴 利润不足';
-      verdictEl.className = 'bt-verdict is-bad';
-    } else {
-      verdictEl.textContent = '待测算';
-      verdictEl.className = 'bt-verdict';
-    }
+    if (comp.status === 'rejected') { verdictEl.textContent = '❌ 侵权驳回'; verdictEl.className = 'bt-verdict is-bad'; }
+    else if (calc.verdict === 'go' && comp.status === 'passed') { verdictEl.textContent = '✅ 建议立项'; verdictEl.className = 'bt-verdict is-go'; }
+    else if (calc.verdict === 'go') { verdictEl.textContent = '🟡 利润达标'; verdictEl.className = 'bt-verdict is-warn'; }
+    else if (calc.verdict === 'caution') { verdictEl.textContent = '🟠 谨慎评估'; verdictEl.className = 'bt-verdict is-warn'; }
+    else if (calc.verdict === 'no_go') { verdictEl.textContent = '🔴 利润不足'; verdictEl.className = 'bt-verdict is-bad'; }
+    else { verdictEl.textContent = '待测算'; verdictEl.className = 'bt-verdict'; }
 
     const diffInput = $('bt-diff-note');
     if (diffInput) {
@@ -343,7 +458,7 @@ function bindSopStudio($, command) {
     }
   }
 
-  // Bind top business mode switcher
+  // Bind top business mode switcher & Hub opener
   if ($('sop-mode-boutique')) {
     $('sop-mode-boutique').onclick = async () => {
       await command('sop-set-mode', { mode: 'boutique' });
@@ -356,6 +471,7 @@ function bindSopStudio($, command) {
       if (typeof window.switchStudio === 'function') window.switchStudio('discovery');
     };
   }
+  if ($('bt-open-hub')) $('bt-open-hub').onclick = () => command('mcp-connector-open', { tab: 'hub' });
 
   // Bind distribution controls
   for (const [id, key] of [
@@ -368,7 +484,7 @@ function bindSopStudio($, command) {
   if ($('dist-save-blocklist')) {
     $('dist-save-blocklist').onclick = async () => {
       await command('sop-update-rules', { custom_blocklist: $('dist-custom-blocklist')?.value || '' });
-      if ($('discovery-message')) $('discovery-message').textContent = '✓ 已保存自定义铺货屏蔽词库（重新发掘或打开画廊立即生效）。';
+      if ($('discovery-message')) $('discovery-message').textContent = '✓ 已保存自定义铺货屏蔽词库。';
     };
   }
   if ($('dist-scope-all')) $('dist-scope-all').onclick = () => command('sop-update-rules', { collection_mode: 'all_variants' });
@@ -378,7 +494,6 @@ function bindSopStudio($, command) {
   if ($('dist-open-ss')) $('dist-open-ss').onclick = () => command('sop-open-sellerstar');
   if ($('dist-live-open-ss')) $('dist-live-open-ss').onclick = () => command('sop-open-sellerstar');
 
-  // Bind Boutique brief export
   if ($('boutique-export-btn')) {
     $('boutique-export-btn').onclick = async () => {
       const res = await command('sop-boutique-export-brief');

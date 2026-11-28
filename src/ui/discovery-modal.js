@@ -40,6 +40,9 @@
       selectEligible: '勾选符合条件',
       collectSelected: n => (n ? `推送至塞星采集箱 (${n})` : '推送至塞星采集箱'),
       openSellerStar: '去塞星上架 ↗',
+      batchIpBtn: '🛡️ SafeSellAI 查侵权',
+      batchIpBusy: '🛡️ 查侵权中…',
+      batchIpDone: (hit, ok) => `✓ SafeSellAI 批量核查完成：可上 ${ok} 件 · 命中风险 ${hit} 件（文字商标+TRO维度）。`,
       close: '关闭',
       defaultFooterDist: '⚡ 铺货模式：已自动查重并标记大牌/敏感词 · 勾选后一键推送塞星入箱上架',
       defaultFooterBoutique: '💎 精品模式：挑选 3–5 个标杆竞品加入立项单 → 拆解差评与 1688 利润精算',
@@ -93,6 +96,9 @@
       selectEligible: 'Select Eligible',
       collectSelected: n => (n ? `Push to Collection (${n})` : 'Push to Collection'),
       openSellerStar: 'Open Collection Box ↗',
+      batchIpBtn: '🛡️ SafeSellAI Scan',
+      batchIpBusy: '🛡️ Scanning…',
+      batchIpDone: (hit, ok) => `✓ SafeSellAI batch scan done: ${ok} clear · ${hit} flagged (TM+TRO text).`,
       close: 'Close',
       defaultFooterDist: '⚡ Distribution SOP: auto brand/risk filter & dedup → select & push to collection box',
       defaultFooterBoutique: '💎 Boutique SOP: shortlist 3–5 benchmark ASINs → teardown pain points & 1688 profit calc',
@@ -324,6 +330,10 @@
     collectBtn.textContent = t('collectSelected', selected.size);
 
     $('btn-open-sellerstar').hidden = !(isDist && canCollect && (justQueued || connected));
+    if ($('btn-batch-ip')) {
+      $('btn-batch-ip').hidden = !itemsList().length;
+      if (!$('btn-batch-ip').disabled) $('btn-batch-ip').textContent = t('batchIpBtn');
+    }
 
     const bOpen = $('btn-open-boutique');
     bOpen.hidden = isDist;
@@ -442,9 +452,17 @@
         thumbWrap.append(pickBtn);
       }
 
-      if (item.already_collected || risks.length) {
+      if (item.already_collected || risks.length || item.safesell_verdict) {
         const guardRow = document.createElement('div');
         guardRow.className = 'card-guard-row';
+        if (item.safesell_verdict) {
+          const sv = document.createElement('span');
+          const isBad = item.safesell_verdict === '命中风险';
+          const isOk = item.safesell_verdict === '可上';
+          sv.className = 'guard-pill ' + (isBad ? 'guard-risk' : isOk ? 'badge-ok' : 'badge-warn');
+          sv.textContent = '🛡️ ' + item.safesell_verdict;
+          guardRow.append(sv);
+        }
         if (item.already_collected) {
           const d = document.createElement('span');
           d.className = 'guard-pill guard-dup';
@@ -559,10 +577,39 @@
   $('btn-select-eligible').onclick = () => {
     selected.clear();
     for (const item of itemsList()) {
-      if (item.distribution_safe) selected.add(item.asin);
+      if (item.distribution_safe && item.safesell_verdict !== '命中风险') selected.add(item.asin);
     }
     render();
   };
+  if ($('btn-batch-ip')) {
+    $('btn-batch-ip').onclick = async () => {
+      const btn = $('btn-batch-ip');
+      if (btn.disabled || !itemsList().length) return;
+      btn.disabled = true;
+      btn.textContent = t('batchIpBusy');
+      try {
+        const res = await cmd('sop-batch-ip-check', { items: itemsList() });
+        const byKey = new Map((res?.results || []).map(r => [String(r.key), r]));
+        let hit = 0, ok = 0;
+        for (const it of itemsList()) {
+          const m = byKey.get(it.asin);
+          if (m) {
+            it.safesell_verdict = m.verdict;
+            it.safesell_hits = m.hits || [];
+            if (m.verdict === '命中风险') hit++;
+            else if (m.verdict === '可上') ok++;
+          }
+        }
+        setFooter(t('batchIpDone', hit, ok), hit ? 'err' : 'ok');
+        render();
+      } catch (err) {
+        setFooter(err?.message || String(err), 'err');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = t('batchIpBtn');
+      }
+    };
+  }
 
   $('btn-collect-selected').onclick = async () => {
     const chosen = itemsList().filter(row => selected.has(row.asin));

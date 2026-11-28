@@ -41,6 +41,7 @@
       <div class="tabs" role="tablist">
         <button id="tab-all" class="tab-pill active" type="button" role="tab" aria-selected="true">全部客户端 <span id="count-all" class="tab-count">6</span></button>
         <button id="tab-connected" class="tab-pill" type="button" role="tab" aria-selected="false">已配置 <span id="count-connected" class="tab-count">0</span></button>
+        <button id="tab-hub" class="tab-pill" type="button" role="tab" aria-selected="false">🔗 产品 MCP 中介 <span id="count-hub" class="tab-count">0</span></button>
         <button id="tab-manual" class="tab-pill" type="button" role="tab" aria-selected="false">自定义 / 手动配置</button>
       </div>
       <div id="search-wrap" class="search-box">
@@ -54,6 +55,17 @@
     <main class="dialog-body">
       <div id="view-grid" class="connector-grid"></div>
       <div id="view-empty" class="empty-state" hidden></div>
+
+      <div id="view-hub" class="hub-view" hidden>
+        <div id="hub-portal-banner" class="hub-banner">
+          <div>
+            <strong id="hub-portal-title">VA 浏览器 · 产品能力中介 Hub</strong>
+            <p id="hub-portal-desc" class="muted">直接复用塞星登录会话，或配置独立外部产品 MCP（SafeSellAI / SellerLens / 1688），不重复造轮子。</p>
+          </div>
+          <button id="btn-hub-open-portal" class="btn-outline-sm" type="button" hidden>打开塞星登录 ↗</button>
+        </div>
+        <div id="hub-services-list" class="hub-list"></div>
+      </div>
 
       <div id="view-manual" class="manual-view" hidden>
         <section class="manual-card">

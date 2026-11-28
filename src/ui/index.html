@@ -204,6 +204,94 @@
 
       <p class="status-note" id="discovery-message" role="status"></p>
 
+      <div id="boutique-sop-card" class="sop-card boutique-card">
+        <div class="section-head">
+          <h2>💎 Boutique Hub (<span id="boutique-count">0</span>)</h2>
+          <div class="bt-src-btns">
+            <button id="bt-open-hub" type="button" class="mini-pill-btn">MCP Hub</button>
+            <button id="boutique-export-btn" type="button" class="mini-pill-btn mini-pill-accent" disabled>Brief .md</button>
+          </div>
+        </div>
+        <div id="boutique-shortlist" class="bt-shortlist"></div>
+        <p id="boutique-empty" class="muted bt-empty">Discover products above &amp; shortlist ASINs to invoke connected SellerLens MCP, SafeSellAI IP MCP &amp; 1688 sourcing skills.</p>
+        <div id="boutique-detail" class="bt-detail" hidden>
+          <div class="bt-item-head">
+            <img id="bt-active-img" class="bt-head-img" alt="" hidden>
+            <div class="bt-head-info"><strong id="bt-active-title"></strong><small id="bt-active-meta"></small></div>
+            <button id="bt-open-url" type="button" class="mini-link-btn">Open ↗</button>
+          </div>
+          <div id="bt-step-2" class="bt-subbox">
+            <div class="bt-subhead">
+              <span class="bt-sublabel">② Market Analysis (SellerLens MCP)</span>
+              <button id="bt-run-teardown" type="button" class="mini-link-btn">Read Page</button>
+            </div>
+            <button id="bt-run-sellerlens" type="button" class="btn-cta-soft bt-full-btn">🔍 Run SellerLens Market Analysis</button>
+            <div id="bt-sellerlens-result" class="hub-res-box" hidden>
+              <div class="hub-res-top"><span id="bt-sl-verdict" class="hub-badge">—</span><span id="bt-sl-score" class="hub-meta-mono"></span><button id="bt-sl-open" type="button" class="mini-link-btn" hidden>Report ↗</button></div>
+              <div id="bt-sl-headline" class="hub-res-text"></div>
+              <div id="bt-sl-tags" class="bt-pains"></div>
+            </div>
+            <div id="bt-teardown-result" class="bt-td-inline" hidden>
+              <div id="bt-td-facts" class="bt-facts"></div>
+              <div id="bt-td-pains" class="bt-pains"></div>
+              <details class="bt-bullets-drawer"><summary>Feature Bullets</summary><ul id="bt-td-bullets" class="bt-bullets"></ul></details>
+            </div>
+          </div>
+          <div id="bt-step-3" class="bt-subbox">
+            <div class="bt-sublabel">③ IP Full Check (SafeSellAI MCP)</div>
+            <div class="ip-dim-checks">
+              <label><input id="ip-dim-text" type="checkbox" checked> TM+TRO</label>
+              <label><input id="ip-dim-design" type="checkbox" checked> Patent</label>
+              <label><input id="ip-dim-copyright" type="checkbox" checked> Copyright</label>
+              <label><input id="ip-dim-vision" type="checkbox" checked> Logo</label>
+            </div>
+            <button id="bt-run-safesell" type="button" class="btn-cta bt-full-btn">🛡️ Run SafeSellAI IP Full Check</button>
+            <div id="bt-safesell-result" class="hub-res-box" hidden>
+              <div class="hub-res-top"><span id="bt-ip-verdict" class="hub-badge">—</span><span id="bt-ip-source" class="hub-meta-mono"></span></div>
+              <div id="bt-ip-dim-pills" class="bt-pains"></div>
+              <div id="bt-ip-hits" class="hub-hit-list"></div>
+              <small id="bt-ip-caveat" class="hub-caveat"></small>
+            </div>
+            <div class="bt-ip-row">
+              <button id="bt-ip-pending" type="button" class="bt-ip-btn">Pending</button>
+              <button id="bt-ip-passed" type="button" class="bt-ip-btn is-pass">✓ Passed</button>
+              <button id="bt-ip-rejected" type="button" class="bt-ip-btn is-reject">✕ Rejected</button>
+            </div>
+            <div id="bt-ip-checks" class="bt-checks-row"></div>
+          </div>
+          <div id="bt-step-4" class="bt-subbox">
+            <div class="bt-sublabel">④ 1688 Sourcing (MCP / Skill Handoff)</div>
+            <div class="bt-sourcing-actions">
+              <button id="bt-handoff-1688" type="button" class="btn-cta-soft">🏭 Run 1688 MCP / Handoff</button>
+              <button id="bt-copy-1688-agent" type="button" class="btn-ghost">📋 Copy 1688 Skill Prompt</button>
+            </div>
+            <div id="bt-1688-handoff-note" class="hub-res-text" hidden></div>
+            <details class="bt-bullets-drawer">
+              <summary>Profit Quick Calculator</summary>
+              <div id="bt-profit-grid" class="metrics-grid" style="margin-top:6px">
+                <label>Price $<input data-pfield="sale_price_usd" type="number" min="0" step=".01"></label>
+                <label>Cost ¥<input data-pfield="cost_cny" type="number" min="0" step=".1"></label>
+                <label>Weight kg<input data-pfield="weight_kg" type="number" min="0" step=".05"></label>
+                <label>Ship ¥/kg<input data-pfield="shipping_per_kg_cny" type="number" min="0" step="1"></label>
+                <label>FBA $<input data-pfield="fba_fee_usd" type="number" min="0" step=".1"></label>
+                <label>ACOS %<input data-pfield="acos_pct" type="number" min="0" max="100" step="1"></label>
+              </div>
+              <div class="bt-kpi-bar" style="margin-top:6px">
+                <div><small>Net Profit</small><strong id="bt-kpi-net">—</strong></div>
+                <div><small>Margin</small><strong id="bt-kpi-margin">—</strong></div>
+                <div><small>BE ACOS</small><strong id="bt-kpi-acos">—</strong></div>
+                <div><small>Verdict</small><span id="bt-kpi-verdict" class="bt-verdict">Pending</span></div>
+              </div>
+            </details>
+          </div>
+          <div id="bt-step-5">
+            <label class="mini-label" for="bt-diff-note">⑤ Differentiation Plan</label>
+            <textarea id="bt-diff-note" rows="2" placeholder="Material upgrade, packaging, bundle accessory…"></textarea>
+          </div>
+          <p id="bt-status-msg" class="status-note" role="status"></p>
+        </div>
+      </div>
+
       <div id="discovery-ranked" class="results-card" hidden>
         <div class="results-bar">
           <div class="results-export">
@@ -231,61 +319,6 @@
             <button id="dist-save-blocklist" type="button" class="btn-cta-soft">Save Guardrails</button>
           </div>
         </details>
-      </div>
-
-      <div id="boutique-sop-card" class="sop-card boutique-card">
-        <div class="section-head">
-          <h2>💎 Boutique Shortlist (<span id="boutique-count">0</span>)</h2>
-          <button id="boutique-export-btn" type="button" class="mini-pill-btn mini-pill-accent" disabled>Export Brief .md</button>
-        </div>
-        <div id="boutique-shortlist" class="bt-shortlist"></div>
-        <p id="boutique-empty" class="muted bt-empty">Run discovery above and shortlist 3–5 benchmark ASINs from the gallery to run teardown, IP gate & unit economics.</p>
-        <div id="boutique-detail" class="bt-detail" hidden>
-          <div class="bt-item-head">
-            <img id="bt-active-img" class="bt-head-img" alt="" hidden>
-            <div class="bt-head-info"><strong id="bt-active-title"></strong><small id="bt-active-meta"></small></div>
-            <button id="bt-open-url" type="button" class="mini-link-btn">Open ↗</button>
-          </div>
-          <button id="bt-run-teardown" type="button" class="btn-cta-soft bt-full-btn">② Background Competitor Teardown</button>
-          <div id="bt-teardown-result" class="bt-subbox" hidden>
-            <div id="bt-td-facts" class="bt-facts"></div>
-            <div class="bt-sublabel">Recurring Review Pain Points</div>
-            <div id="bt-td-pains" class="bt-pains"></div>
-            <details class="bt-bullets-drawer"><summary>Feature Bullets</summary><ul id="bt-td-bullets" class="bt-bullets"></ul></details>
-          </div>
-          <div class="bt-subbox">
-            <div class="bt-sublabel">③ IP & Compliance Gate</div>
-            <div class="bt-ip-row">
-              <button id="bt-ip-pending" type="button" class="bt-ip-btn">Pending</button>
-              <button id="bt-ip-passed" type="button" class="bt-ip-btn is-pass">✓ Passed</button>
-              <button id="bt-ip-rejected" type="button" class="bt-ip-btn is-reject">✕ Rejected</button>
-            </div>
-            <div id="bt-ip-checks" class="bt-checks-row"></div>
-          </div>
-          <div class="bt-subbox">
-            <div class="bt-subhead">
-              <span class="bt-sublabel">④ 1688 Sourcing & Profit Model</span>
-              <div class="bt-src-btns"><button id="bt-jump-1688" type="button" class="mini-link-btn">Search 1688 ↗</button></div>
-            </div>
-            <div id="bt-profit-grid" class="metrics-grid">
-              <label>Price $<input data-pfield="sale_price_usd" type="number" min="0" step=".01"></label>
-              <label>Cost ¥<input data-pfield="cost_cny" type="number" min="0" step=".1"></label>
-              <label>Weight kg<input data-pfield="weight_kg" type="number" min="0" step=".05"></label>
-              <label>Ship ¥/kg<input data-pfield="shipping_per_kg_cny" type="number" min="0" step="1"></label>
-              <label>FBA $<input data-pfield="fba_fee_usd" type="number" min="0" step=".1"></label>
-              <label>ACOS %<input data-pfield="acos_pct" type="number" min="0" max="100" step="1"></label>
-            </div>
-            <div class="bt-kpi-bar">
-              <div><small>Net Profit</small><strong id="bt-kpi-net">—</strong></div>
-              <div><small>Margin</small><strong id="bt-kpi-margin">—</strong></div>
-              <div><small>BE ACOS</small><strong id="bt-kpi-acos">—</strong></div>
-              <div><small>Verdict</small><span id="bt-kpi-verdict" class="bt-verdict">Pending</span></div>
-            </div>
-          </div>
-          <label class="mini-label" for="bt-diff-note">⑤ Differentiation Plan</label>
-          <textarea id="bt-diff-note" rows="2" placeholder="Material upgrade, packaging, bundle accessory…"></textarea>
-          <p id="bt-status-msg" class="status-note" role="status"></p>
-        </div>
       </div>
     </section>
   </div>

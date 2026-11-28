@@ -9,6 +9,7 @@
       closeLabel: '关闭',
       tabAll: '全部客户端',
       tabConnected: '已配置',
+      tabHub: '🔗 产品 MCP 中介',
       tabManual: '自定义 / 手动配置',
       searchPlaceholder: '搜索客户端…',
       toolsUnit: '个工具',
@@ -57,6 +58,7 @@
       closeLabel: 'Close',
       tabAll: 'All Clients',
       tabConnected: 'Connected',
+      tabHub: '🔗 Product MCP Hub',
       tabManual: 'Custom / JSON',
       searchPlaceholder: 'Search connectors…',
       toolsUnit: 'tools',
@@ -111,7 +113,8 @@
 
   let locale = 'zh-CN';
   let info = null;
-  let activeTab = 'all';
+  let hubInfo = null;
+  let activeTab = new URLSearchParams(location.search).get('tab') === 'hub' ? 'hub' : 'all';
   let query = '';
   let busy = false;
   let customFooter = false;
@@ -138,6 +141,7 @@
     $('btn-close').setAttribute('aria-label', t('closeLabel'));
     $('tab-all').childNodes[0].nodeValue = t('tabAll') + ' ';
     $('tab-connected').childNodes[0].nodeValue = t('tabConnected') + ' ';
+    if ($('tab-hub')) $('tab-hub').childNodes[0].nodeValue = t('tabHub') + ' ';
     $('tab-manual').textContent = t('tabManual');
     $('search-input').placeholder = t('searchPlaceholder');
     $('manual-codex-title').textContent = t('manualCodexTitle');
@@ -278,12 +282,21 @@
     $('server-name-badge').textContent = info.server_name || 'va_commerce_browser';
 
     const isManual = activeTab === 'manual';
-    $('search-wrap').hidden = isManual;
+    const isHub = activeTab === 'hub';
+    $('search-wrap').hidden = isManual || isHub;
     $('view-manual').hidden = !isManual;
-    $('view-grid').hidden = isManual;
+    $('view-hub').hidden = !isHub;
+    $('view-grid').hidden = isManual || isHub;
     $('view-empty').hidden = true;
 
-    if (!isManual) {
+    if (hubInfo) {
+      const readyCount = (hubInfo.services || []).filter(s => s.ready).length;
+      if ($('count-hub')) $('count-hub').textContent = String(readyCount);
+    }
+
+    if (isHub) {
+      renderHub();
+    } else if (!isManual) {
       const q = query.trim().toLowerCase();
       const filtered = clients.filter(c => {
         if (activeTab === 'connected' && !c.configured && !c.active) return false;
@@ -300,12 +313,138 @@
     }
   }
 
+  function renderHub() {
+    const list = $('hub-services-list');
+    if (!list) return;
+    const isEn = locale === 'en';
+    const portalOk = Boolean(hubInfo?.portal_connected);
+    const tenant = hubInfo?.portal_tenant || '';
+    $('hub-portal-title').textContent = portalOk
+      ? (isEn ? `Portal Session Connected (${tenant || 'active'})` : `✓ 已复用塞星登录会话（${tenant || '在线'}）`)
+      : (isEn ? 'VA Browser · Outbound Product MCP Hub' : 'VA 浏览器 · 外部产品 MCP 中介中心');
+    $('hub-portal-desc').textContent = portalOk
+      ? (isEn ? 'SafeSellAI IP, SellerLens & 1688 sourcing are ready automatically via Portal session, or override any service with a standalone MCP URL below.'
+        : 'SafeSellAI 侵权全查、SellerLens 精品分析与 1688 寻源已默认就绪；你也可以在下方单独配置独立产品 MCP 端点覆盖。')
+      : (isEn ? 'Connect standalone Streamable HTTP MCP endpoints (SafeSellAI / SellerLens / 1688) so SOP steps invoke them directly.'
+        : '未检测到塞星登录态。你可以直接登录塞星，或在下方填写独立产品 MCP 地址与 Bearer Key，由浏览器做中介统一编排。');
+    if ($('btn-hub-open-portal')) {
+      $('btn-hub-open-portal').hidden = portalOk || info?.mode === 'oss';
+      $('btn-hub-open-portal').onclick = async () => {
+        await cmd('sop-open-sellerstar');
+        await cmd('mcp-connector-close');
+      };
+    }
+
+    const services = hubInfo?.services || [];
+    list.replaceChildren(...services.map(svc => {
+      const card = document.createElement('article');
+      card.className = 'hub-card' + (svc.ready ? ' is-ready' : '');
+
+      const head = document.createElement('div');
+      head.className = 'hub-card-head';
+      const left = document.createElement('div');
+      const h3 = document.createElement('h3');
+      h3.className = 'hub-card-title';
+      h3.textContent = isEn ? svc.name_en : svc.name;
+      const p = document.createElement('p');
+      p.className = 'hub-card-desc';
+      p.textContent = isEn ? svc.description_en : svc.description;
+      left.append(h3, p);
+
+      const badge = document.createElement('span');
+      const stateCls = svc.mode_label === 'mcp' ? 'status-active' : svc.mode_label === 'portal' ? 'status-configured' : 'status-idle';
+      badge.className = 'status-badge ' + stateCls;
+      badge.textContent = svc.mode_label === 'mcp'
+        ? (isEn ? 'MCP Active' : '独立 MCP 已启用')
+        : svc.mode_label === 'portal'
+          ? (isEn ? 'Portal Ready' : '塞星通道就绪')
+          : (isEn ? 'Not Configured' : '未配置');
+      head.append(left, badge);
+
+      const formRow = document.createElement('div');
+      formRow.className = 'hub-form-row';
+      const urlInput = document.createElement('input');
+      urlInput.type = 'text';
+      urlInput.className = 'hub-input';
+      urlInput.value = svc.url || '';
+      urlInput.placeholder = svc.default_url || 'https://.../mcp';
+
+      const tokInput = document.createElement('input');
+      tokInput.type = 'password';
+      tokInput.className = 'hub-input';
+      tokInput.placeholder = svc.has_token
+        ? (isEn ? `Saved (${svc.token_hint}) — enter to replace` : `已保存 (${svc.token_hint}) · 留空保持不变`)
+        : (isEn ? 'Bearer API Key (optional)' : 'Bearer API Key / sk_live_...（可选）');
+      formRow.append(urlInput, tokInput);
+
+      const foot = document.createElement('div');
+      foot.className = 'hub-card-foot';
+      const toggleLbl = document.createElement('label');
+      toggleLbl.className = 'hub-toggle';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = Boolean(svc.enabled);
+      toggleLbl.append(cb, document.createTextNode(isEn ? 'Prefer standalone MCP' : '优先走独立 MCP'));
+
+      const toolsNote = document.createElement('span');
+      toolsNote.className = 'hub-tools-note';
+      toolsNote.textContent = svc.tools?.length ? `${svc.tools.length} tools` : '';
+
+      const btns = document.createElement('div');
+      btns.className = 'card-btns';
+      const testBtn = document.createElement('button');
+      testBtn.type = 'button';
+      testBtn.className = 'btn-outline-sm';
+      testBtn.textContent = isEn ? 'Test MCP' : '测试连接';
+      testBtn.onclick = async () => {
+        testBtn.disabled = true;
+        setFooter((isEn ? 'Testing ' : '正在测试连接 ') + (isEn ? svc.name_en : svc.name) + '…');
+        try {
+          const res = await cmd('hub-test', { id: svc.id, url: urlInput.value.trim(), token: tokInput.value.trim() });
+          if (res?.hub) hubInfo = res.hub;
+          setFooter(`✓ ${isEn ? svc.name_en : svc.name} 连接成功：发现 ${res.count} 个工具 (${res.latency_ms}ms)`, 'ok');
+          render();
+        } catch (err) {
+          setFooter(err?.message || String(err), 'err');
+        } finally {
+          testBtn.disabled = false;
+        }
+      };
+
+      const saveBtn = document.createElement('button');
+      saveBtn.type = 'button';
+      saveBtn.className = 'btn-primary-sm';
+      saveBtn.textContent = isEn ? 'Save' : '保存';
+      saveBtn.onclick = async () => {
+        try {
+          hubInfo = await cmd('hub-save', {
+            id: svc.id,
+            url: urlInput.value.trim(),
+            token: tokInput.value.trim(),
+            enabled: cb.checked,
+          });
+          setFooter(`✓ 已保存 ${isEn ? svc.name_en : svc.name} 配置。`, 'ok');
+          render();
+        } catch (err) {
+          setFooter(err?.message || String(err), 'err');
+        }
+      };
+
+      btns.append(testBtn, saveBtn);
+      foot.append(toggleLbl, toolsNote, btns);
+      card.append(head, formRow, foot);
+      return card;
+    }));
+  }
+
   function switchTab(next) {
     activeTab = next;
-    for (const [id, name] of [['tab-all', 'all'], ['tab-connected', 'connected'], ['tab-manual', 'manual']]) {
+    for (const [id, name] of [['tab-all', 'all'], ['tab-connected', 'connected'], ['tab-hub', 'hub'], ['tab-manual', 'manual']]) {
+      const el = $(id);
+      if (!el) continue;
       const active = name === next;
-      $(id).classList.toggle('active', active);
-      $(id).setAttribute('aria-selected', String(active));
+      el.classList.toggle('active', active);
+      el.setAttribute('aria-selected', String(active));
     }
     render();
   }
@@ -314,8 +453,12 @@
     busy = true;
     render();
     try {
-      const data = await cmd('mcp-connector-info');
+      const [data, hub] = await Promise.all([
+        cmd('mcp-connector-info'),
+        cmd('hub-status').catch(() => null),
+      ]);
       if (data) info = data;
+      if (hub) hubInfo = hub;
     } catch (err) {
       setFooter(err?.message || String(err), 'err');
     } finally {
@@ -368,7 +511,9 @@
 
   $('tab-all').onclick = () => switchTab('all');
   $('tab-connected').onclick = () => switchTab('connected');
+  if ($('tab-hub')) $('tab-hub').onclick = () => switchTab('hub');
   $('tab-manual').onclick = () => switchTab('manual');
+  switchTab(activeTab);
   $('search-input').oninput = e => { query = e.target.value; render(); };
   $('btn-refresh').onclick = () => refresh();
   $('btn-copy-codex').onclick = () => onCopy(info?.codex_command, 'copiedCodex');

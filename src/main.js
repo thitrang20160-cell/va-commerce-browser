@@ -12,6 +12,7 @@ import { resolveLocale, resolveTheme, saveLocale, saveTheme } from './i18n.js';
 import { createPluginHost, loadOptionalExtensionModule, resolveMode } from './plugins/index.js';
 import { inspectMcpConnector, installMcpClient, uninstallMcpClient } from './mcp-connector.js';
 import { build1688SearchUrl, enrichDistributionItems, runBoutiqueTeardown } from './sop-engine.js';
+import { build1688AgentPrompt, run1688McpSearch, runSafeSellMcpAudit, runSellerLensMcpAnalyze, testHubMcp } from './product-hub.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.dirname(here);
@@ -72,9 +73,10 @@ function buildConnectorInfo() {
   });
 }
 
-function openMcpModal() {
+function openMcpModal(initialTab = null) {
   if (!window || window.isDestroyed()) return { open: false };
   if (mcpModal && !mcpModal.isDestroyed()) {
+    if (initialTab === 'hub') void mcpModal.loadFile(path.join(here, 'ui', 'mcp-modal.html'), { query: { tab: 'hub' } });
     mcpModal.show();
     mcpModal.focus();
     return { open: true };
@@ -112,7 +114,7 @@ function openMcpModal() {
     if (mcpModal && !mcpModal.isDestroyed()) mcpModal.show();
   });
   mcpModal.on('closed', () => { mcpModal = null; });
-  void mcpModal.loadFile(path.join(here, 'ui', 'mcp-modal.html'));
+  void mcpModal.loadFile(path.join(here, 'ui', 'mcp-modal.html'), initialTab ? { query: { tab: initialTab } } : undefined);
   return { open: true };
 }
 
@@ -254,6 +256,10 @@ app.whenReady().then(async () => {
     'mcp-connector-copy',
     'mcp-connector-open-demo',
     'mcp-connector-close',
+    'hub-status',
+    'hub-save',
+    'hub-test',
+    'sop-open-sellerstar',
   ]);
 
   const DISCOVERY_MODAL_COMMANDS = new Set([
@@ -269,6 +275,8 @@ app.whenReady().then(async () => {
     'sop-boutique-remove',
     'sop-open-boutique-workbench',
     'sop-open-sellerstar',
+    'sop-batch-ip-check',
+    'sop-ip-check',
   ]);
 
   ipcMain.handle('browser-ui', async (event, command, payload = {}) => {
@@ -396,7 +404,163 @@ app.whenReady().then(async () => {
       return { ok: false };
     }
 
-    if (command === 'mcp-connector-open') return openMcpModal();
+    // ===== Product MCP Hub & External Ecosystem Orchestrator (v0.8.0) =====
+    if (command === 'hub-status') {
+      let portal = { status: 'unavailable', tenant_name: '' };
+      if (engine.sellerStar) {
+        portal = await engine.sellerStar.status().catch(() => ({ status: 'login_required' }));
+      }
+      return engine.productHub.snapshot({
+        portalConnected: portal.status === 'connected',
+        portalTenant: portal.tenant_name || portal.tenant_id || '',
+      });
+    }
+    if (command === 'hub-save') {
+      const id = String(payload?.id || '');
+      engine.productHub.update(id, payload || {});
+      engine.emit();
+      let portal = { status: 'unavailable', tenant_name: '' };
+      if (engine.sellerStar) portal = await engine.sellerStar.status().catch(() => ({ status: 'login_required' }));
+      return engine.productHub.snapshot({
+        portalConnected: portal.status === 'connected',
+        portalTenant: portal.tenant_name || portal.tenant_id || '',
+      });
+    }
+    if (command === 'hub-test') {
+      const id = String(payload?.id || '');
+      const raw = engine.productHub.getRaw(id);
+      if (!raw) throw new Error('Unknown service');
+      const testCfg = {
+        ...raw,
+        ...(payload?.url !== undefined ? { url: payload.url } : {}),
+        ...(payload?.token ? { token: payload.token } : {}),
+      };
+      const tested = await testHubMcp(testCfg);
+      engine.productHub.update(id, {
+        ...(payload?.url !== undefined ? { url: payload.url } : {}),
+        ...(payload?.token ? { token: payload.token } : {}),
+        enabled: true,
+        last_checked_at: new Date().toISOString(),
+        last_status: `ok:${tested.count}`,
+        tools: tested.tools,
+      });
+      engine.emit();
+      return { ...tested, hub: engine.productHub.snapshot({ portalConnected: Boolean(engine.sellerStar) }) };
+    }
+    if (command === 'sop-ip-check') {
+      const targetAsin = String(payload?.asin || '').trim().toUpperCase();
+      const item = engine.sop.state.boutique.items.find(i => i.asin === targetAsin) || payload?.item;
+      if (!item) throw new Error('找不到待查侵权的商品。');
+      const dims = payload?.dims || { text: true, design: true, copyright: true, vision: true };
+      let report;
+      if (engine.productHub.isConfigured('safesellai')) {
+        const res = await runSafeSellMcpAudit(engine.productHub.getRaw('safesellai'), [item], dims);
+        report = res.results[0];
+      } else if (engine.ecosystemBridge) {
+        report = await engine.ecosystemBridge.runPortalIpFullCheck(item, dims);
+      } else {
+        throw new Error('请先在「MCP 连接器 → 产品 Hub」中配置 SafeSellAI MCP（https://safesellai.com/mcp + API Key），或在塞星中登录账号。');
+      }
+      if (engine.sop.state.boutique.items.some(i => i.asin === targetAsin)) {
+        const checkedLabels = [];
+        if (report.dims?.trademark_text?.scanned) checkedLabels.push('商标');
+        if (report.dims?.design_patent?.scanned) checkedLabels.push('外观专利');
+        if (report.dims?.copyright?.scanned) checkedLabels.push('版权');
+        if (report.dims?.trademark_vision?.scanned) checkedLabels.push('图形商标');
+        const sop = engine.sop.updateBoutiqueItem(targetAsin, {
+          ip_report: report,
+          compliance: {
+            status: report.compliance_status || 'pending',
+            checks: checkedLabels,
+            note: `SafeSellAI (${report.verdict}) · ${report.checked_at?.slice(0, 16) || ''}`,
+          },
+        });
+        engine.emit();
+        return { report, sop };
+      }
+      return { report };
+    }
+    if (command === 'sop-batch-ip-check') {
+      const targetItems = Array.isArray(payload?.items) && payload.items.length
+        ? payload.items
+        : (lastDiscoveryData?.items || []);
+      if (!targetItems.length) throw new Error('当前没有待检查的商品列表。');
+      let scanRes;
+      if (engine.productHub.isConfigured('safesellai')) {
+        scanRes = await runSafeSellMcpAudit(engine.productHub.getRaw('safesellai'), targetItems, { text: true, design: false, copyright: false, vision: false });
+      } else if (engine.ecosystemBridge) {
+        scanRes = await engine.ecosystemBridge.runPortalBatchIpScan(targetItems);
+      } else {
+        throw new Error('请先登录塞星或在「产品 MCP Hub」中配置 SafeSellAI MCP。');
+      }
+      const byKey = new Map((scanRes.results || []).map(r => [String(r.key), r]));
+      if (lastDiscoveryData?.items?.length) {
+        for (const it of lastDiscoveryData.items) {
+          const hit = byKey.get(it.asin);
+          if (hit) {
+            it.safesell_verdict = hit.verdict;
+            it.safesell_hits = hit.hits || [];
+          }
+        }
+        pushDiscoveryModalState();
+      }
+      return scanRes;
+    }
+    if (command === 'sop-sellerlens-analyze') {
+      const targetAsin = String(payload?.asin || '').trim().toUpperCase();
+      const item = engine.sop.state.boutique.items.find(i => i.asin === targetAsin);
+      if (!item) throw new Error('找不到精品候选商品。');
+      const kw = String(payload?.keyword || item.keyword || item.title || '').trim().split(/\s+/).slice(0, 5).join(' ');
+      let slReport;
+      if (engine.productHub.isConfigured('sellerlens')) {
+        slReport = await runSellerLensMcpAnalyze(engine.productHub.getRaw('sellerlens'), kw, 'US');
+      } else if (engine.ecosystemBridge) {
+        slReport = await engine.ecosystemBridge.runPortalSellerLensAnalyze(
+          { ...item, keyword: kw },
+          lastDiscoveryData?.items || []
+        );
+      } else {
+        throw new Error('请先在「MCP 连接器 → 产品 Hub」配置 SellerLens MCP 地址，或登录塞星账号复用 SellerLens 选品引擎。');
+      }
+      const sop = engine.sop.updateBoutiqueItem(targetAsin, { sellerlens: slReport });
+      engine.emit();
+      return { sellerlens: slReport, sop };
+    }
+    if (command === 'sop-1688-handoff') {
+      const targetAsin = String(payload?.asin || '').trim().toUpperCase();
+      const item = engine.sop.state.boutique.items.find(i => i.asin === targetAsin) || payload;
+      if (!item) throw new Error('找不到商品信息。');
+      if (payload?.mode === 'agent_prompt') {
+        const prompt = build1688AgentPrompt(item);
+        clipboard.writeText(prompt);
+        return { mode: 'agent_prompt', copied: true, prompt };
+      }
+      if (engine.productHub.isConfigured('sourcing_1688')) {
+        const mcpRes = await run1688McpSearch(engine.productHub.getRaw('sourcing_1688'), item);
+        if (engine.sop.state.boutique.items.some(i => i.asin === targetAsin)) {
+          engine.sop.updateBoutiqueItem(targetAsin, { sourcing_handoff: mcpRes });
+          engine.emit();
+        }
+        return mcpRes;
+      }
+      if (engine.ecosystemBridge) {
+        const handoff = await engine.ecosystemBridge.runPortal1688Handoff(item);
+        if (engine.sop.state.boutique.items.some(i => i.asin === targetAsin)) {
+          engine.sop.updateBoutiqueItem(targetAsin, { sourcing_handoff: handoff, sourcing_url: handoff.portal_url });
+          engine.emit();
+        }
+        if (handoff.portal_url) {
+          await engine.newTab(handoff.portal_url, { activate: true });
+          window.focus();
+        }
+        return handoff;
+      }
+      const prompt = build1688AgentPrompt(item);
+      clipboard.writeText(prompt);
+      return { mode: 'agent_prompt_fallback', copied: true, prompt, message: '已复制 1688 Skill / Agent 寻源指令到剪贴板。' };
+    }
+
+    if (command === 'mcp-connector-open') return openMcpModal(payload?.tab || null);
     if (command === 'mcp-connector-close') {
       if (mcpModal && !mcpModal.isDestroyed()) mcpModal.close();
       return { closed: true };

@@ -293,6 +293,15 @@ export function formatBoutiqueBriefMarkdown(project = {}) {
     lines.push(`- **实际商品链接**: ${item.url}`);
     if (td?.brand) lines.push(`- **品牌 / 变体数 / 视频**: ${td.brand} · ${td.variant_count || 1} 变体 · ${td.has_video ? '有主图视频（建议用 browser_video_read 拆解脚本）' : '暂无主图视频'}`);
     if (td?.bsr) lines.push(`- **BSR 排名**: ${td.bsr}`);
+    if (item.sellerlens) {
+      const sl = item.sellerlens;
+      lines.push(`- **SellerLens 精品分析**: 综合分 \`${sl.composite_score ?? '—'}\` (${sl.tier || '—'}) · 战略结论 **${sl.ai_verdict || '—'}**${sl.aba_rank ? ` · ABA #${sl.aba_rank}` : ''}${sl.trend_label ? ` · 趋势 ${sl.trend_label}` : ''}${sl.ai_headline ? ` — ${sl.ai_headline}` : ''}`);
+    }
+    if (item.ip_report) {
+      const ip = item.ip_report;
+      const dimSummary = Object.entries(ip.dims || {}).map(([k, v]) => `${k}:${v.scanned ? (v.hit_count ? v.hit_count + '命中' : '未命中') : '未查成'}`).join(' / ');
+      lines.push(`- **SafeSellAI 侵权全查**: **${ip.verdict}**（来源 \`${ip.source}\` · ${dimSummary || '文字维度'}）`);
+    }
     lines.push(`- **合规与 IP 核查**: ${ipLabel(item.compliance?.status)}${item.compliance?.checks?.length ? ' · 已核项: ' + item.compliance.checks.join(' / ') : ''}${item.compliance?.note ? ' · 备注: ' + item.compliance.note : ''}`);
     if (p.cost_cny > 0) {
       lines.push(`- **单件利润精算**: 售价 \`$${p.sale_price_usd}\` − 采购 \`¥${p.cost_cny}\`(\`$${p.product_cost_usd}\`) − 头程 \`$${p.freight_usd}\` − FBA \`$${p.fba_fee_usd}\` − 佣金 \`$${p.referral_fee_usd}\` − 广告(${p.acos_pct}%) \`$${p.ad_cost_usd}\` − 退货损耗 \`$${p.return_loss_usd}\` = **净利 \`$${p.net_profit_usd}\`（净利率 ${p.net_margin_pct}% · ROI ${p.roi_pct}% · 盈亏平衡 ACOS ${p.breakeven_acos_pct}%）**`);
@@ -492,6 +501,15 @@ export class SopStore {
       if (typeof patch.teardown.price === 'number' && !item.profit.sale_price_usd) {
         item.profit.sale_price_usd = patch.teardown.price;
       }
+    }
+    if (patch.ip_report && typeof patch.ip_report === 'object') {
+      item.ip_report = patch.ip_report;
+    }
+    if (patch.sellerlens && typeof patch.sellerlens === 'object') {
+      item.sellerlens = patch.sellerlens;
+    }
+    if (patch.sourcing_handoff && typeof patch.sourcing_handoff === 'object') {
+      item.sourcing_handoff = patch.sourcing_handoff;
     }
     this.save();
     return this.snapshot();
