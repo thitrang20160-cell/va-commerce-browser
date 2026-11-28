@@ -73,7 +73,10 @@ function bindProductDiscovery($, command) {
       const meta = document.createElement('small');
       const price = item.data.listed_price === null ? '售价未知' : '$' + item.data.listed_price.toFixed(2);
       const decision = item.decision === 'eligible' ? '符合条件' : '待补充数据';
-      meta.textContent = [item.asin, price, decision].join(' · ');
+      const tags = [item.asin, price, decision];
+      if (item.already_collected) tags.push('塞星已有');
+      if (item.risk_flags?.length) tags.push('⚠ ' + item.risk_flags[0].label);
+      meta.textContent = tags.join(' · ');
       const reasons = document.createElement('small');
       reasons.textContent = item.reasons.slice(0, 2).join(' · ');
       const actions = document.createElement('div');
@@ -164,7 +167,10 @@ function bindProductDiscovery($, command) {
   if ($('discovery-open-modal')) $('discovery-open-modal').onclick = () => openGalleryModal();
   $('discovery-select').onclick = () => {
     selected.clear();
-    for (const row of result?.items ?? []) if (row.decision === 'eligible') selected.add(row.asin);
+    const isDist = state?.sop?.mode === 'distribution';
+    for (const row of result?.items ?? []) {
+      if (isDist ? row.distribution_safe : row.decision === 'eligible') selected.add(row.asin);
+    }
     render();
   };
   if ($('discovery-export-csv')) $('discovery-export-csv').onclick = () => exportReport('csv');
@@ -174,7 +180,12 @@ function bindProductDiscovery($, command) {
     busy = true; updateButtons();
     try {
       const chosen = result.items.filter(row => selected.has(row.asin));
-      const job = await command('sellerstar-batch-start', { tenant_id: result.account.tenant_id, links: chosen.map(row => row.url) });
+      const collectionMode = state?.sop?.distribution?.collection_mode || 'all_variants';
+      const job = await command('sellerstar-batch-start', {
+        tenant_id: result.account.tenant_id,
+        links: chosen.map(row => row.url),
+        collection_mode: collectionMode,
+      });
       if (job) { selected.clear(); render(); $('batch-toggle').click(); }
     } finally { busy = false; updateButtons(); }
   };

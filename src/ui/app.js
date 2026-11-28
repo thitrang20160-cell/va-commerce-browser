@@ -67,6 +67,7 @@ document.querySelectorAll('#discovery-presets .preset-chip').forEach(chip => {
 if ($('workspace-toggle')) $('workspace-toggle').onclick = () => switchStudio('workspace');
 
 const extensionUpdaters = (window.browserExtensions || []).map(bind => bind($, command));
+const updateSop = typeof bindSopStudio === 'function' ? bindSopStudio($, command) : () => {};
 const updateDiscovery = typeof bindProductDiscovery === 'function' ? bindProductDiscovery($, command) : () => {};
 
 function hasPanel(state, name) {
@@ -177,6 +178,7 @@ function update(state) {
   }
 
   for (const updater of extensionUpdaters) updater(state, active);
+  updateSop(state);
   if (discoveryEnabled) updateDiscovery(state);
   switchStudio(activeStudio);
 

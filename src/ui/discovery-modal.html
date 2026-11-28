@@ -19,6 +19,10 @@
           <div class="title-row">
             <h1 id="dm-title">AI 选品画廊</h1>
             <span id="dm-keyword-pill" class="kw-pill">Amazon US</span>
+            <div class="sop-mode-switch" role="group" aria-label="SOP Mode">
+              <button id="m-boutique" class="sop-mode-btn" type="button">💎 精品</button>
+              <button id="m-distribution" class="sop-mode-btn" type="button">⚡ 铺货</button>
+            </div>
           </div>
           <p id="dm-summary" class="subtitle">已观察 0 件 · 精选 0 件</p>
         </div>
@@ -27,6 +31,7 @@
       <div class="header-actions">
         <div class="filter-pills" role="tablist">
           <button id="f-all" class="filter-pill active" type="button">全部 <span id="c-all" class="pill-n">0</span></button>
+          <button id="f-safe" class="filter-pill" type="button" hidden>可铺货 <span id="c-safe" class="pill-n">0</span></button>
           <button id="f-eligible" class="filter-pill" type="button">符合 <span id="c-eligible" class="pill-n">0</span></button>
           <button id="f-evidence" class="filter-pill" type="button">待核 <span id="c-evidence" class="pill-n">0</span></button>
         </div>
@@ -62,6 +67,8 @@
             <h2 id="d-title" class="detail-title"></h2>
             <div class="asin-row">
               <span id="d-asin" class="asin-chip">B000000000</span>
+              <span id="d-dup-chip" class="status-chip chip-dup" hidden>塞星已有</span>
+              <span id="d-risk-chip" class="status-chip chip-risk" hidden>⚠ 风险词</span>
               <button id="btn-copy-asin" class="mini-ghost" type="button">复制 ASIN</button>
               <span id="d-first-seen" class="seen-text"></span>
             </div>
@@ -93,8 +100,9 @@
             <div id="d-reasons" class="reason-tags"></div>
           </div>
 
-          <!-- Primary CTA -->
+          <!-- Primary CTA Row -->
           <div class="detail-cta-row">
+            <button id="btn-boutique-toggle" class="btn-boutique-cta" type="button" hidden>+ 加入精品立项单</button>
             <button id="btn-open-live" class="btn-primary-lg" type="button">进入亚马逊实际商品页 ↗</button>
           </div>
         </div>
@@ -104,8 +112,14 @@
     <footer class="dialog-footer">
       <div id="dm-footer-status" class="footer-status" role="status">点击左侧卡片预览详情 · 点击链接直接进入实际商品页</div>
       <div class="footer-actions">
-        <button id="btn-select-eligible" class="btn-outline" type="button" hidden>勾选符合条件</button>
-        <button id="btn-collect-selected" class="btn-primary" type="button" hidden>确认并采集已选</button>
+        <div id="scope-pills" class="scope-pills" hidden>
+          <button id="scope-all" class="scope-pill active" type="button">含全部变体</button>
+          <button id="scope-main" class="scope-pill" type="button">仅主商品</button>
+        </div>
+        <button id="btn-select-eligible" class="btn-outline" type="button" hidden>勾选可铺货</button>
+        <button id="btn-collect-selected" class="btn-primary" type="button" hidden>推送至塞星采集箱</button>
+        <button id="btn-open-sellerstar" class="btn-outline" type="button" hidden>去塞星上架 ↗</button>
+        <button id="btn-open-boutique" class="btn-primary" type="button" hidden>进入精品深挖 SOP →</button>
         <button id="btn-done" class="btn-outline" type="button">关闭</button>
       </div>
     </footer>

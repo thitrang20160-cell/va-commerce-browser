@@ -11,6 +11,7 @@ import { resolveDataDir, resolveDownloadDir } from './paths.js';
 import { resolveLocale, resolveTheme, saveLocale, saveTheme } from './i18n.js';
 import { createPluginHost, loadOptionalExtensionModule, resolveMode } from './plugins/index.js';
 import { inspectMcpConnector, installMcpClient, uninstallMcpClient } from './mcp-connector.js';
+import { build1688SearchUrl, enrichDistributionItems, runBoutiqueTeardown } from './sop-engine.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.dirname(here);
@@ -116,6 +117,12 @@ function openMcpModal() {
 }
 
 function buildDiscoveryModalPayload() {
+  const sopSnap = engine?.sop?.snapshot() ?? null;
+  const rules = sopSnap?.distribution || {};
+  const enrichedResult = lastDiscoveryData ? {
+    ...lastDiscoveryData,
+    items: enrichDistributionItems(lastDiscoveryData.items || [], rules),
+  } : null;
   return {
     locale: engine?.locale || 'zh-CN',
     theme: engine?.theme || 'dark',
@@ -123,8 +130,15 @@ function buildDiscoveryModalPayload() {
     sellerstar_enabled: Boolean(engine?.plugins?.enabledPanels?.().includes('sellerstar-batch')),
     paused: Boolean(engine?.paused),
     focus_asin: lastDiscoveryFocusAsin,
-    result: lastDiscoveryData,
+    sop: sopSnap,
+    result: enrichedResult,
   };
+}
+
+function pushDiscoveryModalState() {
+  if (discoveryModal && !discoveryModal.isDestroyed()) {
+    discoveryModal.webContents.send('browser-state', buildDiscoveryModalPayload());
+  }
 }
 
 function openDiscoveryModal(result, focusAsin = null) {
@@ -249,6 +263,12 @@ app.whenReady().then(async () => {
     'discovery-export',
     'mcp-connector-copy',
     'sellerstar-batch-start',
+    'sop-set-mode',
+    'sop-update-rules',
+    'sop-boutique-add',
+    'sop-boutique-remove',
+    'sop-open-boutique-workbench',
+    'sop-open-sellerstar',
   ]);
 
   ipcMain.handle('browser-ui', async (event, command, payload = {}) => {
@@ -274,6 +294,106 @@ app.whenReady().then(async () => {
       if (payload?.close_modal !== false && discoveryModal && !discoveryModal.isDestroyed()) discoveryModal.close();
       window.focus();
       return engine.describe(tab);
+    }
+
+    if (command === 'sop-set-mode') {
+      const sop = engine.sop.setMode(payload?.mode);
+      engine.emit();
+      pushDiscoveryModalState();
+      return sop;
+    }
+    if (command === 'sop-update-rules') {
+      const sop = engine.sop.updateDistributionRules(payload || {});
+      engine.emit();
+      pushDiscoveryModalState();
+      return sop;
+    }
+    if (command === 'sop-boutique-add') {
+      const list = Array.isArray(payload?.items) ? payload.items : (payload?.item ? [payload.item] : []);
+      let sop = engine.sop.snapshot();
+      for (const item of list) sop = engine.sop.addBoutiqueItem(item);
+      engine.emit();
+      pushDiscoveryModalState();
+      return sop;
+    }
+    if (command === 'sop-boutique-remove') {
+      const sop = engine.sop.removeBoutiqueItem(payload?.asin);
+      engine.emit();
+      pushDiscoveryModalState();
+      return sop;
+    }
+    if (command === 'sop-boutique-select') {
+      const sop = engine.sop.selectBoutiqueItem(payload?.asin);
+      engine.emit();
+      return sop;
+    }
+    if (command === 'sop-boutique-update') {
+      const sop = engine.sop.updateBoutiqueItem(payload?.asin, payload?.patch || {});
+      engine.emit();
+      return sop;
+    }
+    if (command === 'sop-boutique-teardown') {
+      const targetAsin = String(payload?.asin || '').trim().toUpperCase();
+      const item = engine.sop.state.boutique.items.find(i => i.asin === targetAsin);
+      if (!item) throw new Error('Boutique item not found');
+      const teardown = await runBoutiqueTeardown(engine, item);
+      const sop = engine.sop.updateBoutiqueItem(targetAsin, { teardown });
+      engine.emit();
+      return { teardown, sop };
+    }
+    if (command === 'sop-boutique-source-1688') {
+      const targetAsin = String(payload?.asin || '').trim().toUpperCase();
+      const item = engine.sop.state.boutique.items.find(i => i.asin === targetAsin) || payload;
+      const url = build1688SearchUrl(item);
+      const tab = await engine.newTab(url, { activate: true });
+      window.focus();
+      return { url, tab: engine.describe(tab) };
+    }
+    if (command === 'sop-boutique-read-1688-tab') {
+      const targetAsin = String(payload?.asin || '').trim().toUpperCase();
+      const tab = engine.tabs.get(engine.active);
+      if (!tab) return { status: 'no_tab' };
+      const url = tab.view.webContents.getURL();
+      if (!/1688\.com/i.test(url)) return { status: 'not_1688' };
+      if (typeof engine.readProductPreview !== 'function') return { status: 'unsupported' };
+      const preview = await engine.readProductPreview(tab, { detail: true });
+      if (preview?.status !== 'ok' || !preview.product) return { status: preview?.status || 'unavailable' };
+      const prod = preview.product;
+      const priceCny = Number(prod.offer?.amount || prod.offer?.price_candidate || 0);
+      const weightKg = Number(prod.weight_kg || 0);
+      const patch = {
+        sourcing_url: prod.url || url,
+        sourcing_supplier: prod.supplier || prod.brand || '',
+        profit: {
+          ...(priceCny > 0 ? { cost_cny: priceCny } : {}),
+          ...(weightKg > 0 ? { weight_kg: weightKg } : {}),
+        },
+      };
+      const sop = engine.sop.updateBoutiqueItem(targetAsin, patch);
+      engine.emit();
+      return { status: 'ok', price_cny: priceCny, supplier: patch.sourcing_supplier, sop };
+    }
+    if (command === 'sop-boutique-export-brief') {
+      return engine.sop.exportBrief(downloadDir || dataDir);
+    }
+    if (command === 'sop-open-boutique-workbench') {
+      engine.sop.setMode('boutique');
+      if (discoveryModal && !discoveryModal.isDestroyed()) discoveryModal.close();
+      engine.emit();
+      if (!window.isDestroyed()) {
+        window.webContents.send('browser-state', { ...engine.state(), _focus_view: 'boutique' });
+        window.focus();
+      }
+      return { ok: true };
+    }
+    if (command === 'sop-open-sellerstar') {
+      if (discoveryModal && !discoveryModal.isDestroyed()) discoveryModal.close();
+      if (engine.plugins.hasIpc('sellerstar-open')) {
+        const res = await engine.plugins.handleIpc('sellerstar-open', {}, { engine, window, downloadDir });
+        window.focus();
+        return res.result;
+      }
+      return { ok: false };
     }
 
     if (command === 'mcp-connector-open') return openMcpModal();

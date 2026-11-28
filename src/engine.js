@@ -10,6 +10,7 @@ import { ReceiptStore } from './receipt-store.js';
 import { PluginHost } from './plugin-host.js';
 import { definitionsForMode } from './tools.js';
 import { tMain } from './i18n.js';
+import { SopStore } from './sop-engine.js';
 
 const fault = (code, message) => Object.assign(new Error(message), { code });
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -83,6 +84,7 @@ export class BrowserEngine {
     this.receiptStore = new ReceiptStore(dataDir, { maxHotReceipts: options.maxHotReceipts });
     this.journalPath = this.receiptStore.journalPath;
     this.receipts = this.receiptStore.records;
+    this.sop = new SopStore(dataDir, { defaultMode: this.mode === 'internal' ? 'distribution' : 'boutique' });
     if (this.receiptStore.hasUncertain()) this.paused = true;
     this.plugins.onEngineInit(this);
   }
@@ -110,6 +112,7 @@ export class BrowserEngine {
       enabled_panels: this.plugins.enabledPanels(),
       paused: this.paused,
       active: this.active,
+      sop: this.sop.snapshot(),
       ...this.plugins.describeState(this),
       tabs: [...this.tabs.values()].map(t => this.describe(t)),
       clients: [...this.clients].map(([name, at]) => ({ name, at })),

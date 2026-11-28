@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { collectionCandidates, productCandidatesExpression } from './product-candidates.js';
+import { enrichDistributionItems } from './sop-engine.js';
 
 const FALLBACK_ALIASES = [
   { pattern: '厨房收纳', keyword: 'kitchen storage organization' },
@@ -241,5 +242,6 @@ export async function discoverProducts(engine, args) {
       await plugin.enrichDiscovery(engine, payload);
     }
   }
+  payload.items = enrichDistributionItems(payload.items, engine.sop?.state?.distribution || {});
   return payload;
 }
