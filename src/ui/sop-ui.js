@@ -3,7 +3,9 @@ function bindSopStudio($, command) {
   let busyTeardown = false;
   let busySafeSell = false;
   let busySellerLens = false;
+  let busyCad = false;
   let busy1688 = false;
+  let lastCadAsin = null;
   let lastSavedTimer = null;
 
   const isEn = () => (state?.locale || 'zh-CN') === 'en';
@@ -12,10 +14,11 @@ function bindSopStudio($, command) {
 
   const BOUTIQUE_STEPS = [
     { zh: '① 赛道初筛', en: '1. Screen', target: () => document.querySelector('#product-discovery .composer-card') },
-    { zh: '② SellerLens分析', en: '2. SellerLens', target: () => $('bt-step-2') || $('boutique-sop-card') },
-    { zh: '③ 侵权全查', en: '3. SafeSellAI IP', target: () => $('bt-step-3') || $('boutique-sop-card') },
-    { zh: '④ 1688寻源', en: '4. 1688 Source', target: () => $('bt-step-4') || $('boutique-sop-card') },
-    { zh: '⑤ 立项包', en: '5. Brief', target: () => $('bt-step-5') || $('boutique-sop-card') },
+    { zh: '② SellerLens', en: '2. SellerLens', target: () => $('bt-step-2') || $('boutique-sop-card') },
+    { zh: '③ 侵权全查', en: '3. IP Check', target: () => $('bt-step-3') || $('boutique-sop-card') },
+    { zh: '④ 📐模型草稿', en: '4. CAD Draft', target: () => $('bt-step-cad') || $('boutique-sop-card') },
+    { zh: '⑤ 1688发盘', en: '5. 1688 RFQ', target: () => $('bt-step-4') || $('boutique-sop-card') },
+    { zh: '⑥ 立项包', en: '6. Brief', target: () => $('bt-step-5') || $('boutique-sop-card') },
   ];
   const DIST_STEPS = [
     { zh: '① 批量扫品', en: '1. Scan', target: () => document.querySelector('#product-discovery .composer-card') },
@@ -63,8 +66,9 @@ function bindSopStudio($, command) {
     if (!item) return 0;
     if (!item.sellerlens && (!item.teardown || item.teardown.status !== 'ok')) return 1;
     if (!item.compliance || item.compliance.status === 'pending') return 2;
-    if (!item.sourcing_handoff && !(Number(item.profit?.cost_cny) > 0)) return 3;
-    return 4;
+    if (!item.model_draft) return 3;
+    if (!item.sourcing_handoff && !(Number(item.profit?.cost_cny) > 0)) return 4;
+    return 5;
   }
 
   function calcActiveDistStep() {
@@ -385,7 +389,106 @@ function bindSopStudio($, command) {
       }));
     }
 
-    // Step 4: 1688 Sourcing Handoff (reuse SellerStar / 1688 Skill / MCP)
+    // Step 4: Parametric CAD Model Draft (STEP/STL/DXF + DFM + RFQ)
+    const populateCadInputs = spec => {
+      if (!spec) return;
+      if ($('cad-template') && spec.template) $('cad-template').value = spec.template;
+      if ($('cad-material') && spec.material) $('cad-material').value = spec.material;
+      if ($('cad-length') && spec.length_mm != null) $('cad-length').value = spec.length_mm;
+      if ($('cad-width') && spec.width_mm != null) $('cad-width').value = spec.width_mm;
+      if ($('cad-height') && spec.height_mm != null) $('cad-height').value = spec.height_mm;
+      if ($('cad-wall') && spec.wall_mm != null) $('cad-wall').value = spec.wall_mm;
+      if ($('cad-radius') && spec.corner_radius_mm != null) $('cad-radius').value = spec.corner_radius_mm;
+      if ($('cad-draft') && spec.draft_deg != null) $('cad-draft').value = spec.draft_deg;
+    };
+    const readCadInputs = () => ({
+      template: $('cad-template')?.value || 'silicone_mat',
+      material: $('cad-material')?.value || 'food_grade_silicone',
+      length_mm: Number($('cad-length')?.value) || undefined,
+      width_mm: Number($('cad-width')?.value) || undefined,
+      height_mm: Number($('cad-height')?.value) || undefined,
+      wall_mm: Number($('cad-wall')?.value) || undefined,
+      corner_radius_mm: Number($('cad-radius')?.value) || undefined,
+      draft_deg: $('cad-draft')?.value !== '' ? Number($('cad-draft')?.value) : undefined,
+    });
+
+    if (lastCadAsin !== active.asin) {
+      lastCadAsin = active.asin;
+      if (active.model_draft?.spec) {
+        populateCadInputs(active.model_draft.spec);
+      } else {
+        command('sop-cad-infer', { asin: active.asin }).then(populateCadInputs);
+      }
+    }
+    if ($('bt-cad-infer')) {
+      $('bt-cad-infer').onclick = async () => {
+        const inferred = await command('sop-cad-infer', { asin: active.asin });
+        populateCadInputs(inferred);
+        setMsg(`✓ 已根据商品标题与痛点推演尺寸：${inferred.length_mm}×${inferred.width_mm}×${inferred.height_mm}mm`);
+      };
+    }
+    const cadBtn = $('bt-run-cad');
+    if (cadBtn) {
+      cadBtn.disabled = busyCad;
+      cadBtn.textContent = busyCad
+        ? (isEn() ? 'Generating STEP/STL/DXF…' : '📐 正在生成模型草稿与 DFM 体检…')
+        : active.model_draft
+          ? (isEn() ? '↻ Regenerate Model Draft' : '📐 按当前参数重新生成模型草稿')
+          : (isEn() ? '📐 Generate Model Draft (STEP/STL/DXF)' : '📐 生成模型草稿 (.STEP / .STL / .DXF)');
+      cadBtn.onclick = async () => {
+        if (busyCad) return;
+        busyCad = true;
+        renderBoutiqueCard();
+        setMsg('正在生成参数化模型草稿（.STEP + .STL + .DXF + 蓝图 + 工厂工艺单）…');
+        try {
+          const res = await command('sop-cad-generate', { asin: active.asin, spec: readCadInputs() });
+          if (res?.draft) {
+            setMsg(`✓ 模型草稿已生成：${res.draft.dfm?.weight_g}g · ${res.draft.dfm?.fba_tier}（已保存至 ${res.draft.files?.dir || '草稿目录'}）。`);
+          }
+        } finally {
+          busyCad = false;
+          renderBoutiqueCard();
+        }
+      };
+    }
+
+    const cadBox = $('bt-cad-result');
+    const draft = active.model_draft;
+    if (cadBox && draft) {
+      cadBox.hidden = false;
+      if ($('bt-cad-svg') && draft.preview_svg_data_uri) $('bt-cad-svg').src = draft.preview_svg_data_uri;
+      const dfm = draft.dfm || {};
+      const badge = $('bt-cad-dfm-badge');
+      badge.textContent = `DFM ${dfm.status_label || 'OK'}`;
+      badge.className = 'hub-badge ' + (dfm.warn_count ? 'is-warn' : 'is-ok');
+      $('bt-cad-mass').textContent = `${dfm.weight_g ?? '—'}g · ¥${dfm.est_material_cny ?? '—'}料 · ${dfm.fba_tier || ''}`;
+      $('bt-cad-checks').replaceChildren(...(dfm.checks || []).map(c => {
+        const row = document.createElement('div');
+        row.className = 'cad-check-item' + (c.ok ? ' is-ok' : ' is-warn');
+        row.textContent = (c.ok ? '✓ ' : '⚠ ') + c.msg;
+        return row;
+      }));
+      if ($('bt-cad-open-dir')) {
+        $('bt-cad-open-dir').hidden = !draft.files?.dir;
+        $('bt-cad-open-dir').onclick = () => command('sop-cad-open-folder', { dir: draft.files.dir });
+      }
+      if ($('bt-cad-apply-wt')) {
+        $('bt-cad-apply-wt').onclick = async () => {
+          const r = await command('sop-cad-apply-weight', { asin: active.asin });
+          if (r) setMsg(`✓ 已将模型测算净重 ${r.weight_kg} kg 回填至下方利润精算器。`);
+        };
+      }
+      if ($('bt-cad-copy-rfq')) {
+        $('bt-cad-copy-rfq').onclick = async () => {
+          const r = await command('sop-cad-copy-rfq', { asin: active.asin });
+          if (r?.copied) setMsg('✓ 已复制工厂发盘 RFQ 询价话术，直接粘贴给 1688 工厂/旺旺即可。');
+        };
+      }
+    } else if (cadBox) {
+      cadBox.hidden = true;
+    }
+
+    // Step 5: 1688 Sourcing Handoff (reuse SellerStar / 1688 Skill / MCP)
     const handoffBtn = $('bt-handoff-1688');
     if (handoffBtn) {
       handoffBtn.disabled = busy1688;

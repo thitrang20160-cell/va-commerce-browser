@@ -6,6 +6,10 @@ const permissionInputs = [...document.querySelectorAll('#site-permissions input'
 let appliedLocale = null;
 let appliedMode = null;
 let activeStudio = 'workspace';
+const studioScrolls = new Map();
+let tabTaskKey = '';
+let topTabKey = '';
+let renderedActiveTab = null;
 
 const command = async (name, args = {}) => {
   try { return await window.browserUI.command(name, args); }
@@ -15,13 +19,19 @@ const command = async (name, args = {}) => {
   }
 };
 
-function switchStudio(mode) {
+function switchStudio(mode, reveal = true) {
   const panes = {
     workspace: { pane: $('workspace-pane'), tab: $('workspace-toggle') },
     discovery: { pane: $('product-discovery'), tab: $('discovery-toggle') },
     batch: { pane: $('sellerstar-batch'), tab: $('batch-toggle') },
+    settings: { pane: $('settings-pane'), tab: $('settings-toggle') },
+    downloads: { pane: $('downloads-pane'), tab: $('downloads-toggle') },
+    search: { pane: $('search-pane'), tab: $('quick-find') },
   };
   if (!panes[mode]?.pane || panes[mode]?.tab?.hidden) mode = 'workspace';
+  const body = document.querySelector('.studio-body');
+  const changed = mode !== activeStudio;
+  if (changed && body) studioScrolls.set(activeStudio, body.scrollTop);
   activeStudio = mode;
   for (const [key, item] of Object.entries(panes)) {
     const on = key === mode;
@@ -32,8 +42,9 @@ function switchStudio(mode) {
       if (item.tab.hasAttribute('aria-expanded')) item.tab.setAttribute('aria-expanded', String(on));
     }
   }
-  const body = document.querySelector('.studio-body');
-  if (body) body.scrollTop = 0;
+  if (changed && body) body.scrollTop = studioScrolls.get(mode) || 0;
+  if (reveal && current?.sidebar_open === false) command('toggle-sidebar', { open: true });
+  window.workspaceShell?.onPaneChange(mode);
 }
 window.switchStudio = switchStudio;
 
@@ -76,7 +87,11 @@ function hasPanel(state, name) {
 
 function updateTabTasks(tabs) {
   const list = $('tab-tasks');
-  const tasks = tabs.filter(tab => tab.active || tab.owner || tab.collecting || tab.watching?.length);
+  const query = ($('tab-search')?.value || '').toLocaleLowerCase().trim();
+  const key = JSON.stringify([tabs.map(tab => [tab.id, tab.title, tab.url, tab.active, tab.owner, tab.loading, tab.collecting, tab.watching]), appliedLocale, query]);
+  if (key === tabTaskKey) return;
+  tabTaskKey = key;
+  const tasks = tabs.filter(tab => `${tab.title} ${tab.url}`.toLocaleLowerCase().includes(query));
   list.replaceChildren(...tasks.map(tab => {
     const item = document.createElement('button');
     item.type = 'button';
@@ -96,9 +111,55 @@ function updateTabTasks(tabs) {
     item.append(title, detail);
     return item;
   }));
+  if (!tasks.length) {
+    const empty = document.createElement('p'); empty.className = 'empty-note';
+    empty.textContent = appliedLocale === 'en' ? 'No matching tabs' : '没有匹配的标签页'; list.append(empty);
+  }
+}
+window.filterBrowserTabs = () => { if (current) updateTabTasks(current.tabs); };
+
+function updateTopTabs(state) {
+  const key = JSON.stringify([state.tabs.map(tab => [tab.id, tab.title, tab.url, tab.owner, tab.collecting, tab.watching, tab.loading]), state.active, appliedLocale]);
+  if (key === topTabKey) return;
+  topTabKey = key;
+  const container = $('tabs'), nodes = new Map([...container.children].map(el => [el.dataset.tabId, el]));
+  const liveIds = new Set(state.tabs.map(tab => tab.id));
+  for (const [id, el] of nodes) if (!liveIds.has(id)) el.remove();
+  state.tabs.forEach((tab, index) => {
+    let item = nodes.get(tab.id);
+    if (!item) {
+      item = document.createElement('div'); item.dataset.tabId = tab.id; item.setAttribute('role', 'tab');
+      const dot = document.createElement('span'); dot.className = 'tab-dot';
+      const title = document.createElement('span'); title.className = 'tab-title';
+      const close = document.createElement('button'); close.type = 'button'; close.textContent = '×';
+      close.onclick = event => { event.stopPropagation(); command('close', { tab_id: tab.id }); };
+      item.onclick = () => command('switch', { tab_id: tab.id });
+      item.onkeydown = event => {
+        if (event.target !== item) return;
+        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); item.click(); }
+        if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+          event.preventDefault(); const items = [...container.children], i = items.indexOf(item);
+          const next = items[(i + (event.key === 'ArrowRight' ? 1 : -1) + items.length) % items.length]; next?.click(); next?.focus();
+        }
+      };
+      item.append(dot, title, close);
+    }
+    const on = tab.id === state.active;
+    item.className = 'tab' + (on ? ' active' : ''); item.tabIndex = on ? 0 : -1;
+    item.setAttribute('aria-selected', String(on)); item.setAttribute('aria-label', tab.title);
+    item.querySelector('.tab-dot').hidden = !(tab.owner || tab.collecting || tab.watching?.length);
+    const title = item.querySelector('.tab-title'); title.textContent = tab.title; title.title = tab.url;
+    const close = item.querySelector('button'); close.title = t('closeTabTitle'); close.setAttribute('aria-label', t('closeTabTitle') + ': ' + tab.title);
+    if (container.children[index] !== item) container.insertBefore(item, container.children[index] || null);
+  });
+  if (state.active !== renderedActiveTab) {
+    renderedActiveTab = state.active;
+    container.querySelector('.active')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
 }
 
 function update(state) {
+  if (!state?.tabs) return;
   current = state;
   const nextLocale = state.locale || 'zh-CN';
   const nextMode = state.mode || 'internal';
@@ -127,27 +188,7 @@ function update(state) {
   const active = state.tabs.find(tab => tab.id === state.active);
   if (document.activeElement !== $('address')) $('address').value = active?.url || '';
   $('zoom').textContent = Math.round((active?.zoom || 1) * 100) + '%';
-  $('tabs').replaceChildren(...state.tabs.map(tab => {
-    const item = document.createElement('div');
-    item.className = 'tab' + (tab.id === state.active ? ' active' : '');
-    if (tab.owner || tab.collecting || tab.watching?.length) {
-      const dot = document.createElement('span');
-      dot.className = 'tab-dot';
-      item.append(dot);
-    }
-    const title = document.createElement('span');
-    title.className = 'tab-title';
-    title.textContent = tab.title;
-    title.title = tab.url;
-    const close = document.createElement('button');
-    close.type = 'button';
-    close.textContent = '×';
-    close.title = t('closeTabTitle');
-    close.onclick = event => { event.stopPropagation(); command('close', { tab_id: tab.id }); };
-    item.onclick = () => command('switch', { tab_id: tab.id });
-    item.append(title, close);
-    return item;
-  }));
+  updateTopTabs(state);
 
   const chip = $('state-chip');
   if (chip) {
@@ -180,7 +221,7 @@ function update(state) {
   for (const updater of extensionUpdaters) updater(state, active);
   updateSop(state);
   if (discoveryEnabled) updateDiscovery(state);
-  switchStudio(activeStudio);
+  switchStudio(activeStudio, false);
 
   $('status').textContent = t('statusLocal', state.version);
   $('empty').hidden = state.tabs.length > 0;
@@ -213,8 +254,10 @@ function update(state) {
     node.append(title, detail);
     $('receipts').append(node);
   }
+  window.workspaceShell?.update(state);
 }
 
+window.workspaceShell?.bind(command, switchStudio);
 window.browserUI.subscribe(update);
 $('address-form').onsubmit = event => {
   event.preventDefault();

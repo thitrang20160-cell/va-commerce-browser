@@ -352,13 +352,15 @@
       left.append(h3, p);
 
       const badge = document.createElement('span');
-      const stateCls = svc.mode_label === 'mcp' ? 'status-active' : svc.mode_label === 'portal' ? 'status-configured' : 'status-idle';
+      const stateCls = svc.mode_label === 'mcp' ? 'status-active' : (svc.mode_label === 'portal' || svc.mode_label === 'builtin') ? 'status-configured' : 'status-idle';
       badge.className = 'status-badge ' + stateCls;
       badge.textContent = svc.mode_label === 'mcp'
         ? (isEn ? 'MCP Active' : '独立 MCP 已启用')
         : svc.mode_label === 'portal'
           ? (isEn ? 'Portal Ready' : '塞星通道就绪')
-          : (isEn ? 'Not Configured' : '未配置');
+          : svc.mode_label === 'builtin'
+            ? (isEn ? 'Built-in Ready' : '内置引擎就绪')
+            : (isEn ? 'Not Configured' : '未配置');
       head.append(left, badge);
 
       const formRow = document.createElement('div');

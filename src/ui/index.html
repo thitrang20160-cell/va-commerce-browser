@@ -5,6 +5,8 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https://*.media-amazon.com https://*.ssl-images-amazon.com https://*.images-amazon.com">
   <title>VA Commerce Browser</title>
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="workspace-shell.css">
+  <link rel="stylesheet" href="workspace-theme.css">
 </head>
 <body>
 <header>
@@ -259,8 +261,50 @@
             </div>
             <div id="bt-ip-checks" class="bt-checks-row"></div>
           </div>
+          <div id="bt-step-cad" class="bt-subbox">
+            <div class="bt-subhead">
+              <span class="bt-sublabel">④ 📐 CAD Model Draft (STEP/STL/DXF)</span>
+              <button id="bt-cad-infer" type="button" class="mini-link-btn">Auto-Infer</button>
+            </div>
+            <div class="cad-select-row">
+              <select id="cad-template">
+                <option value="silicone_mat">Silicone Drip Mat</option>
+                <option value="storage_bin">Storage Bin</option>
+                <option value="organizer_tray">Drawer Organizer</option>
+                <option value="stand_holder">Desktop Stand</option>
+              </select>
+              <select id="cad-material">
+                <option value="food_grade_silicone">Silicone 60A</option>
+                <option value="pp_plastic">Virgin PP</option>
+                <option value="abs_plastic">ABS Plastic</option>
+                <option value="pet_clear">Clear PET</option>
+                <option value="aluminum_6061">6061 Aluminum</option>
+                <option value="acrylic">PMMA Acrylic</option>
+              </select>
+            </div>
+            <div id="cad-dims-grid" class="cad-dims-grid">
+              <label>L mm<input id="cad-length" type="number" min="30" max="1500" step="1"></label>
+              <label>W mm<input id="cad-width" type="number" min="30" max="1200" step="1"></label>
+              <label>H mm<input id="cad-height" type="number" min="6" max="600" step="1"></label>
+              <label>Wall<input id="cad-wall" type="number" min="0.8" max="25" step="0.1"></label>
+              <label>R mm<input id="cad-radius" type="number" min="0" max="60" step="1"></label>
+              <label>Draft°<input id="cad-draft" type="number" min="0" max="15" step="0.5"></label>
+            </div>
+            <button id="bt-run-cad" type="button" class="btn-cta-soft bt-full-btn">📐 Generate Model Draft (STEP/STL/DXF)</button>
+            <div id="bt-cad-result" class="hub-res-box" hidden>
+              <img id="bt-cad-svg" class="cad-preview-img" alt="Model Draft Blueprint">
+              <div class="hub-res-top"><span id="bt-cad-dfm-badge" class="hub-badge is-ok">PASS</span><span id="bt-cad-mass" class="hub-meta-mono"></span></div>
+              <div id="bt-cad-checks" class="cad-check-list"></div>
+              <div class="cad-action-row">
+                <button id="bt-cad-open-dir" type="button" class="mini-link-btn">📂 Open Folder</button>
+                <button id="bt-cad-apply-wt" type="button" class="mini-link-btn">⚖ Apply Weight</button>
+                <button id="bt-cad-copy-rfq" type="button" class="mini-link-btn">📋 Copy RFQ</button>
+              </div>
+              <small class="hub-caveat">⚠️ Model Draft candidate — require factory mold engineer DFM sign-off before paying tooling deposit.</small>
+            </div>
+          </div>
           <div id="bt-step-4" class="bt-subbox">
-            <div class="bt-sublabel">④ 1688 Sourcing (MCP / Skill Handoff)</div>
+            <div class="bt-sublabel">⑤ 1688 Sourcing (MCP / Skill Handoff)</div>
             <div class="bt-sourcing-actions">
               <button id="bt-handoff-1688" type="button" class="btn-cta-soft">🏭 Run 1688 MCP / Handoff</button>
               <button id="bt-copy-1688-agent" type="button" class="btn-ghost">📋 Copy 1688 Skill Prompt</button>
@@ -331,6 +375,6 @@
 
 <div id="empty"><h2 data-i18n="emptyHeading">Start Browsing</h2><p data-i18n="emptyHint">Enter a URL above or open a new tab.</p></div>
 <div id="error" role="status" hidden></div>
-<script src="i18n-ui.js"></script><script src="sop-ui.js"></script><script src="product-discovery.js"></script><script src="app.js"></script>
+<script src="i18n-ui.js"></script><script src="sop-ui.js"></script><script src="product-discovery.js"></script><script src="workspace-shell.js"></script><script src="app.js"></script>
 </body>
 </html>

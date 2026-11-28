@@ -31,6 +31,16 @@ export const HUB_SERVICES = [
     descriptionEn: 'Image/keyword factory sourcing (falls back to ERP workbench or 1688 Skill)',
     portalFallback: true,
   },
+  {
+    id: 'cad_draft',
+    name: '📐 模型草稿 CAD MCP',
+    nameEn: '📐 Parametric CAD Draft MCP',
+    defaultUrl: 'http://127.0.0.1:18990/mcp',
+    description: '参数化模型草稿 (.STEP/.STL/.DXF + DFM + 克重 + RFQ)，可接 CadQuery/FreeCAD/Onshape/Tripo MCP，未配置时用内置引擎',
+    descriptionEn: 'Parametric STEP/STL/DXF draft & DFM check (plug CadQuery/FreeCAD/Onshape MCP or use built-in engine)',
+    portalFallback: false,
+    builtinFallback: true,
+  },
 ];
 
 function validateMcpUrl(raw) {
@@ -132,8 +142,11 @@ export class ProductHubStore {
           has_token: Boolean(cfg.token),
           token_hint: cfg.token ? `${cfg.token.slice(0, 6)}…${cfg.token.slice(-4)}` : '',
           portal_fallback: Boolean(meta.portalFallback && portalConnected),
-          ready: Boolean((cfg.enabled && cfg.url) || (meta.portalFallback && portalConnected)),
-          mode_label: (cfg.enabled && cfg.url) ? 'mcp' : (meta.portalFallback && portalConnected ? 'portal' : 'unconfigured'),
+          builtin_fallback: Boolean(meta.builtinFallback),
+          ready: Boolean((cfg.enabled && cfg.url) || (meta.portalFallback && portalConnected) || meta.builtinFallback),
+          mode_label: (cfg.enabled && cfg.url)
+            ? 'mcp'
+            : (meta.portalFallback && portalConnected ? 'portal' : (meta.builtinFallback ? 'builtin' : 'unconfigured')),
           last_checked_at: cfg.last_checked_at || null,
           last_status: cfg.last_status || null,
           tools: Array.isArray(cfg.tools) ? cfg.tools.slice(0, 40) : [],
@@ -353,4 +366,17 @@ export async function run1688McpSearch(cfg, item) {
     if (!parsed || res?.isError) throw new Error(parsed?.error || parsed?.raw_text || '1688 MCP 调用失败');
     return { source: '1688_mcp', tool, data: parsed };
   }, { timeoutMs: 45000 });
+}
+
+export async function runCadDraftMcp(cfg, spec) {
+  return withMcpClient(cfg, async client => {
+    const listed = await client.listTools();
+    const names = (listed?.tools || []).map(t => t.name);
+    const tool = names.find(n => /generate.?draft|cad.?generate|build.?model|create.?cad/i.test(n)) || names[0];
+    if (!tool) throw new Error('CAD MCP 未暴露可用的建模工具。');
+    const res = await client.callTool({ name: tool, arguments: spec });
+    const parsed = parseMcpToolJson(res);
+    if (!parsed || res?.isError) throw new Error(parsed?.error || parsed?.raw_text || 'CAD MCP 生成模型草稿失败');
+    return { ...parsed, source: 'cad_mcp:' + tool };
+  }, { timeoutMs: 90000 });
 }

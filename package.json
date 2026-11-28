@@ -1,7 +1,7 @@
 {
   "name": "va-commerce-browser",
   "productName": "VA Commerce Browser",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "author": "VaMoon Contributors",
   "homepage": "https://github.com/thitrang20160-cell/va-commerce-browser",
   "repository": {
@@ -17,8 +17,9 @@
   },
   "scripts": {
     "start": "node scripts/start.js",
+    "start:cad-mcp": "node scripts/cad-draft-mcp.mjs",
     "setup:mcp": "node scripts/setup-mcp.mjs",
-    "test": "node --test tests/oss-core.js tests/product-discovery.js tests/sop-engine.js tests/product-hub.js",
+    "test": "node --test tests/oss-core.js tests/product-discovery.js tests/sop-engine.js tests/product-hub.js tests/cad-draft.js",
     "test:desktop": "node --test tests/desktop-smoke.js",
     "dist:win": "npx --yes electron-builder --win --publish never",
     "dist:mac": "npx --yes electron-builder --mac --publish never",

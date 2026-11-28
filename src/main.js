@@ -12,7 +12,8 @@ import { resolveLocale, resolveTheme, saveLocale, saveTheme } from './i18n.js';
 import { createPluginHost, loadOptionalExtensionModule, resolveMode } from './plugins/index.js';
 import { inspectMcpConnector, installMcpClient, uninstallMcpClient } from './mcp-connector.js';
 import { build1688SearchUrl, enrichDistributionItems, runBoutiqueTeardown } from './sop-engine.js';
-import { build1688AgentPrompt, run1688McpSearch, runSafeSellMcpAudit, runSellerLensMcpAnalyze, testHubMcp } from './product-hub.js';
+import { build1688AgentPrompt, run1688McpSearch, runCadDraftMcp, runSafeSellMcpAudit, runSellerLensMcpAnalyze, testHubMcp } from './product-hub.js';
+import { generateModelDraft, inferDraftSpec } from './cad-draft-engine.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.dirname(here);
@@ -24,8 +25,8 @@ const windowIcon = (process.platform === 'win32' && fs.existsSync(appIconIco))
 
 function titleBarOverlayOptions(theme) {
   return theme === 'light'
-    ? { color: '#ebf1f4', symbolColor: '#0f242c', height: 41 }
-    : { color: '#090d12', symbolColor: '#93a9b5', height: 41 };
+    ? { color: '#eeece7', symbolColor: '#2f2e2b', height: 43 }
+    : { color: '#252523', symbolColor: '#c0bdb5', height: 43 };
 }
 
 function argument(name) {
@@ -100,7 +101,7 @@ function openMcpModal(initialTab = null) {
     maximizable: false,
     frame: false,
     show: false,
-    backgroundColor: engine?.theme === 'light' ? '#ffffff' : '#0d131a',
+    backgroundColor: engine?.theme === 'light' ? '#f7f6f3' : '#1f1f1d',
     webPreferences: {
       preload: path.join(here, 'preload.cjs'),
       contextIsolation: true,
@@ -174,7 +175,7 @@ function openDiscoveryModal(result, focusAsin = null) {
     maximizable: true,
     frame: false,
     show: false,
-    backgroundColor: engine?.theme === 'light' ? '#f4f7f9' : '#0c1117',
+    backgroundColor: engine?.theme === 'light' ? '#f7f6f3' : '#1f1f1d',
     webPreferences: {
       preload: path.join(here, 'preload.cjs'),
       contextIsolation: true,
@@ -222,8 +223,8 @@ app.whenReady().then(async () => {
   window = new BrowserWindow({
     title: mode === 'oss' ? 'VA Commerce Browser' : packageInfo.productName,
     icon: windowIcon,
-    width: 1420, height: 940, minWidth: 980, minHeight: 640,
-    backgroundColor: theme === 'light' ? '#f4f7f9' : '#0b0f14',
+    width: 1480, height: 940, minWidth: 900, minHeight: 620,
+    backgroundColor: theme === 'light' ? '#f7f6f3' : '#1f1f1d',
     autoHideMenuBar: true,
     titleBarStyle: isMac ? 'hiddenInset' : 'hidden',
     ...(isMac
@@ -560,6 +561,66 @@ app.whenReady().then(async () => {
       return { mode: 'agent_prompt_fallback', copied: true, prompt, message: '已复制 1688 Skill / Agent 寻源指令到剪贴板。' };
     }
 
+    // ===== Parametric CAD Model Draft (STEP / STL / DXF / DFM / RFQ) =====
+    if (command === 'sop-cad-infer') {
+      const targetAsin = String(payload?.asin || '').trim().toUpperCase();
+      const item = engine.sop.state.boutique.items.find(i => i.asin === targetAsin) || payload || {};
+      return inferDraftSpec(item);
+    }
+    if (command === 'sop-cad-generate') {
+      const targetAsin = String(payload?.asin || '').trim().toUpperCase();
+      const item = engine.sop.state.boutique.items.find(i => i.asin === targetAsin);
+      const baseSpec = item ? inferDraftSpec(item) : {};
+      const mergedSpec = {
+        ...baseSpec,
+        ...(payload?.spec || {}),
+        asin: targetAsin || payload?.spec?.asin || baseSpec.asin || '',
+        title: item?.title || payload?.spec?.title || baseSpec.title || '',
+        diff_note: item?.diff_note || payload?.spec?.diff_note || baseSpec.diff_note || '',
+      };
+      const outDir = path.join(downloadDir || dataDir, 'VA-Model-Drafts');
+      let draft;
+      if (engine.productHub.isConfigured('cad_draft')) {
+        draft = await runCadDraftMcp(engine.productHub.getRaw('cad_draft'), mergedSpec);
+      } else {
+        draft = generateModelDraft(mergedSpec, outDir);
+      }
+      if (item) {
+        const sop = engine.sop.updateBoutiqueItem(targetAsin, { model_draft: draft });
+        engine.emit();
+        return { draft, sop };
+      }
+      return { draft };
+    }
+    if (command === 'sop-cad-apply-weight') {
+      const targetAsin = String(payload?.asin || '').trim().toUpperCase();
+      const item = engine.sop.state.boutique.items.find(i => i.asin === targetAsin);
+      if (!item?.model_draft?.dfm) throw new Error('请先生成模型草稿。');
+      const wKg = Number(item.model_draft.dfm.weight_kg);
+      const sop = engine.sop.updateBoutiqueItem(targetAsin, {
+        profit: { ...(item.profit || {}), weight_kg: wKg > 0 ? wKg : item.profit?.weight_kg },
+      });
+      engine.emit();
+      return { weight_kg: wKg, sop };
+    }
+    if (command === 'sop-cad-copy-rfq') {
+      const targetAsin = String(payload?.asin || '').trim().toUpperCase();
+      const item = engine.sop.state.boutique.items.find(i => i.asin === targetAsin);
+      const text = item?.model_draft?.rfq_text;
+      if (!text) throw new Error('请先生成模型草稿。');
+      clipboard.writeText(text);
+      return { copied: true };
+    }
+    if (command === 'sop-cad-open-folder') {
+      const dir = path.resolve(String(payload?.dir || ''));
+      const allowedRoots = [path.resolve(downloadDir || dataDir), path.resolve(dataDir)];
+      if (!allowedRoots.some(r => dir === r || dir.startsWith(r + path.sep)) || !fs.existsSync(dir)) {
+        throw new Error('草稿目录不可访问。');
+      }
+      await shell.openPath(dir);
+      return { opened: true, dir };
+    }
+
     if (command === 'mcp-connector-open') return openMcpModal(payload?.tab || null);
     if (command === 'mcp-connector-close') {
       if (mcpModal && !mcpModal.isDestroyed()) mcpModal.close();
@@ -586,6 +647,19 @@ app.whenReady().then(async () => {
     }
 
     if (command === 'state') return engine.state();
+    if (command === 'set-panel-width') {
+      const width = Number(payload.width);
+      if (!Number.isFinite(width)) throw new Error('Invalid panel width');
+      engine.panelWidth = width === 0 ? 0 : Math.max(300, Math.min(600, width));
+      engine.layout();
+      return { chrome_layout: engine.chromeLayout() };
+    }
+    if (command === 'download-reveal') {
+      const file = engine.downloads.find(row => row.id === payload.id);
+      if (!file || file.state !== 'completed' || !fs.existsSync(file.path)) throw new Error('下载文件不存在或尚未完成。');
+      shell.showItemInFolder(file.path);
+      return { shown: true };
+    }
     if (command === 'pause') { engine.pause(); return engine.state(); }
     if (command === 'resume') { engine.resume(); return engine.state(); }
     if (command === 'set-locale') {
@@ -595,7 +669,7 @@ app.whenReady().then(async () => {
     }
     if (command === 'set-theme') {
       engine.theme = saveTheme(dataDir, payload.theme);
-      window.setBackgroundColor(engine.theme === 'light' ? '#f4f7f9' : '#0b0f14');
+      window.setBackgroundColor(engine.theme === 'light' ? '#f7f6f3' : '#1f1f1d');
       if (!isMac && typeof window.setTitleBarOverlay === 'function') {
         window.setTitleBarOverlay(titleBarOverlayOptions(engine.theme));
       }
@@ -652,6 +726,7 @@ app.whenReady().then(async () => {
     const tab = [...engine.tabs.values()].find(tab => tab.view.webContents === contents);
     const record = { id: randomBytes(8).toString('hex'), tab_id: tab?.id ?? null, filename, path: destination, state: 'progressing' };
     engine.downloads.push(record);
+    engine.emit();
     item.once('done', (_ev, state) => { record.state = state; engine.emit(); });
   });
 

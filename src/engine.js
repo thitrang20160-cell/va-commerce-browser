@@ -12,6 +12,7 @@ import { definitionsForMode } from './tools.js';
 import { tMain } from './i18n.js';
 import { SopStore } from './sop-engine.js';
 import { ProductHubStore } from './product-hub.js';
+import { chromeLayout } from './chrome-layout.js';
 
 const fault = (code, message) => Object.assign(new Error(message), { code });
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -60,6 +61,8 @@ export class BrowserEngine {
     this.locale = options.locale || 'zh-CN';
     this.theme = options.theme === 'light' ? 'light' : 'dark';
     this.sidebarOpen = true;
+    this.panelWidth = 0;
+    this.installChromeShortcuts(window.webContents);
     this.plugins = options.plugins instanceof PluginHost ? options.plugins : new PluginHost();
     this.sellerStar = options.sellerStar ?? null;
     this.tabs = new Map();
@@ -110,6 +113,7 @@ export class BrowserEngine {
       locale: this.locale,
       theme: this.theme,
       sidebar_open: this.sidebarOpen,
+      chrome_layout: this.chromeLayout(),
       plugins: this.plugins.ids(),
       enabled_panels: this.plugins.enabledPanels(),
       paused: this.paused,
@@ -218,6 +222,7 @@ export class BrowserEngine {
     const t = { id: randomUUID(), view, epoch: 0, snapshot: null, lease: null, ready: false, openerId, batchOwned, sitePermissionUse: new Set() };
     this.tabs.set(t.id, t);
     const wc = view.webContents;
+    this.installChromeShortcuts(wc);
     installEditMenu(this.window, wc, () => this.active === t.id, () => this.locale);
     wc.setWindowOpenHandler(({ url: popupUrl }) => {
       if (t.batchOwned) return { action: 'deny' };
@@ -276,13 +281,31 @@ export class BrowserEngine {
     }
   }
 
-  layout() {
+  chromeLayout() {
     const [width, height] = this.window.getContentSize();
-    const sidebarWidth = this.sidebarOpen ? 360 : 0;
-    const topChrome = 88;
+    return chromeLayout(width, height, this.sidebarOpen, this.panelWidth);
+  }
+
+  installChromeShortcuts(contents) {
+    contents.on('before-input-event', (event, input) => {
+      if (input.type !== 'keyDown' || !(input.control || input.meta) || input.alt) return;
+      const key = input.key.toLowerCase();
+      const action = key === 'l' && !input.shift ? 'address' : key === 'k' && !input.shift ? 'search'
+        : key === 't' && !input.shift ? 'new' : key === 'w' && !input.shift ? 'close-tab'
+        : key === 'e' && input.shift ? 'sidebar' : key === 'tab' ? (input.shift ? 'previous-tab' : 'next-tab') : null;
+      if (!action) return;
+      event.preventDefault();
+      this.window.webContents.focus();
+      this.window.webContents.send('browser-shortcut', action);
+    });
+  }
+
+  layout() {
+    const layout = this.chromeLayout();
     for (const t of this.tabs.values()) {
-      t.view.setBounds({ x: 0, y: topChrome, width: Math.max(320, width - sidebarWidth), height: Math.max(160, height - topChrome) });
+      t.view.setBounds(layout.page);
     }
+    if (!this.window.webContents.isDestroyed()) this.window.webContents.send('browser-layout', layout);
   }
 
   async command(t, method, args = {}, { timeoutMs = 20_000 } = {}) {

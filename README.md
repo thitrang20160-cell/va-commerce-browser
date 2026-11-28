@@ -1,4 +1,4 @@
-# VA 电商AI浏览器 · VA Commerce Browser (`v0.8.0`)
+# VA 电商AI浏览器 · VA Commerce Browser (`v0.9.0`)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-14b8a6.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-22%2B-339933.svg)](https://nodejs.org/)
@@ -8,7 +8,7 @@
 
 **One visible desktop browser shared safely across Claude Code, Codex, Cursor, Windsurf, and any MCP client — with persistent real logins, zero-disruption background execution, 180s per-tab agent leases, `-93.5%` compact snapshots, local video reading, SHA-256 idempotent action receipts, built-in 1-click MCP Connectors modal, and a 50-line site extractor plugin host.**
 
-> **中文简介（VA 电商AI浏览器）**：面向 AI Agent 与跨境电商团队的开源可见桌面浏览器（MIT）。让 Claude Code / Codex / Cursor / Windsurf 通过标准 MCP 共享同一个真实登录浏览器——**后台静默执行不抢前台、多 Agent 分标签页租约隔离、紧凑快照直省 93.5% Token、写操作 SHA-256 幂等回执、本机 FFmpeg/Whisper 读网页视频、弹窗式一键 MCP 连接器、AI 选品图文弹窗画廊、以及「💎 精品模式（竞品拆解+差评痛点+IP闸门+1688利润精算+立项评审包）/ ⚡ 铺货模式（大牌敏感词风控+去重快筛+直连采集队列）」双模式 SOP 工作台**，支持深浅双主题与 **EN / 中文** 一键切换。
+> **中文简介（VA 电商AI浏览器）**：面向 AI Agent 与跨境电商团队的开源可见桌面浏览器（MIT）。让 Claude Code / Codex / Cursor / Windsurf 通过标准 MCP 共享同一个真实登录浏览器——**后台静默执行不抢前台、多 Agent 分标签页租约隔离、紧凑快照直省 93.5% Token、写操作 SHA-256 幂等回执、本机 FFmpeg/Whisper 读网页视频、弹窗式双向产品 MCP 中介（支持接入 SafeSellAI / SellerLens / 1688 / 外部 CAD 建模 MCP）、AI 选品图文弹窗画廊、以及「💎 精品模式（市场分析+侵权全查+📐参数化模型草稿 .STEP/.STL/.DXF + DFM/FBA预检+1688利润精算+立项包）/ ⚡ 铺货模式（大牌敏感词风控+去重快筛+直连采集队列）」双模式 SOP 工作台**，支持深浅双主题与 **EN / 中文** 一键切换。
 
 ---
 
@@ -34,7 +34,7 @@ Most browser automation MCP servers force a painful trade-off: spawn disposable 
 
 **VA Commerce Browser is built for real human + multi-agent daily work:**
 
-| Capability | Playwright / Puppeteer MCP | Headless Browser-Use Agents | **VA 电商AI浏览器 (`v0.8.0`)** |
+| Capability | Playwright / Puppeteer MCP | Headless Browser-Use Agents | **VA 电商AI浏览器 (`v0.9.0`)** |
 | --- | --- | --- | --- |
 | **Persistent visible browser & real logins** | Ephemeral headless by default | Requires manual CDP attach | **Dedicated Electron desktop browser with persistent real profile** |
 | **Zero-disruption background execution** | Disrupts / steals active view | No interactive daily browsing shell | **Background tabs render off-top (`108/108` checks, `0` focus shifts)** |

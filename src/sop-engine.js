@@ -302,6 +302,13 @@ export function formatBoutiqueBriefMarkdown(project = {}) {
       const dimSummary = Object.entries(ip.dims || {}).map(([k, v]) => `${k}:${v.scanned ? (v.hit_count ? v.hit_count + '命中' : '未命中') : '未查成'}`).join(' / ');
       lines.push(`- **SafeSellAI 侵权全查**: **${ip.verdict}**（来源 \`${ip.source}\` · ${dimSummary || '文字维度'}）`);
     }
+    if (item.model_draft) {
+      const md = item.model_draft;
+      const sp = md.spec || {};
+      const dfm = md.dfm || {};
+      lines.push(`- **📐 定制模型草稿 (Model Draft)**: ${sp.template_name || sp.template} · \`${sp.length_mm}×${sp.width_mm}×${sp.height_mm}mm\` (壁厚 \`${sp.wall_mm}mm\` / 拔模 \`${sp.draft_deg}°\`) · 测算净重 **\`${dfm.weight_g}g\`** · DFM **\`${dfm.status_label}\`** · FBA \`${dfm.fba_tier}\``);
+      if (md.files?.step) lines.push(`  - 工程文件包: \`${md.files.dir}\` (\`.step\` / \`.stl\` / \`.dxf\` / \`.py\` / \`factory-rfq-techpack.md\`)`);
+    }
     lines.push(`- **合规与 IP 核查**: ${ipLabel(item.compliance?.status)}${item.compliance?.checks?.length ? ' · 已核项: ' + item.compliance.checks.join(' / ') : ''}${item.compliance?.note ? ' · 备注: ' + item.compliance.note : ''}`);
     if (p.cost_cny > 0) {
       lines.push(`- **单件利润精算**: 售价 \`$${p.sale_price_usd}\` − 采购 \`¥${p.cost_cny}\`(\`$${p.product_cost_usd}\`) − 头程 \`$${p.freight_usd}\` − FBA \`$${p.fba_fee_usd}\` − 佣金 \`$${p.referral_fee_usd}\` − 广告(${p.acos_pct}%) \`$${p.ad_cost_usd}\` − 退货损耗 \`$${p.return_loss_usd}\` = **净利 \`$${p.net_profit_usd}\`（净利率 ${p.net_margin_pct}% · ROI ${p.roi_pct}% · 盈亏平衡 ACOS ${p.breakeven_acos_pct}%）**`);
@@ -510,6 +517,9 @@ export class SopStore {
     }
     if (patch.sourcing_handoff && typeof patch.sourcing_handoff === 'object') {
       item.sourcing_handoff = patch.sourcing_handoff;
+    }
+    if (patch.model_draft && typeof patch.model_draft === 'object') {
+      item.model_draft = patch.model_draft;
     }
     this.save();
     return this.snapshot();
