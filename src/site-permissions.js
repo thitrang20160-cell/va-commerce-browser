@@ -1,15 +1,16 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { desktopCapturer, dialog, Menu } from 'electron';
+import { tMain } from './i18n.js';
 
-const names = {
-  camera: '摄像头',
-  microphone: '麦克风',
-  geolocation: '定位',
-  notifications: '通知',
-  screen: '屏幕共享',
+const permissionKeys = ['camera', 'microphone', 'geolocation', 'notifications', 'screen'];
+const permissionLabelKey = {
+  camera: 'permCamera',
+  microphone: 'permMicrophone',
+  geolocation: 'permGeolocation',
+  notifications: 'permNotifications',
+  screen: 'permScreen',
 };
-const permissions = Object.keys(names);
 const mediaPermissions = { video: 'camera', audio: 'microphone' };
 
 export function siteOrigin(raw) {
@@ -29,7 +30,7 @@ export class SitePermissions {
       const stored = JSON.parse(fs.readFileSync(this.file, 'utf8'));
       for (const [origin, grants] of Object.entries(stored)) {
         if (siteOrigin(origin) === origin && Array.isArray(grants)) {
-          this.sites.set(origin, new Set(grants.filter(grant => permissions.includes(grant))));
+          this.sites.set(origin, new Set(grants.filter(grant => permissionKeys.includes(grant))));
         }
       }
     } catch (error) {
@@ -40,7 +41,7 @@ export class SitePermissions {
   has(origin, permission) { return this.sites.get(origin)?.has(permission) === true; }
 
   describe(origin) {
-    return Object.fromEntries(permissions.map(permission => [permission, this.has(origin, permission)]));
+    return Object.fromEntries(permissionKeys.map(permission => [permission, this.has(origin, permission)]));
   }
 
   save(origin, permission, allowed) {
@@ -58,19 +59,24 @@ export class SitePermissions {
   }
 
   async update(engine, window, tab, { origin, permission, allowed }) {
-    if (!permissions.includes(permission) || typeof allowed !== 'boolean') throw new Error('无效的网站权限。');
+    const locale = engine.locale || 'zh-CN';
+    if (!permissionKeys.includes(permission) || typeof allowed !== 'boolean') throw new Error(tMain(locale, 'permInvalid'));
     const isCurrent = () => Boolean(origin && engine.active === tab.id && !tab.view.webContents.isDestroyed() &&
       siteOrigin(tab.view.webContents.getURL()) === origin);
-    if (!isCurrent()) throw new Error('网站已变化，请在当前网站重新操作。');
+    if (!isCurrent()) throw new Error(tMain(locale, 'permSiteChanged'));
     if (this.has(origin, permission) === allowed) return;
     const affectedTabs = () => [...engine.tabs.values()].filter(candidate =>
       candidate.sitePermissionUse.has(permission) && !candidate.view.webContents.isDestroyed() &&
       siteOrigin(candidate.view.webContents.getURL()) === origin);
     if (!allowed && affectedTabs().length) {
+      const permName = tMain(locale, permissionLabelKey[permission]);
       const { response } = await dialog.showMessageBox(window, {
-        type: 'warning', message: '关闭' + names[permission] + '权限？',
-        detail: '浏览器会刷新曾使用此权限的页面，结束可能仍在运行的会话。未提交的内容可能丢失。',
-        buttons: ['取消', '关闭权限并刷新'], defaultId: 0, cancelId: 0,
+        type: 'warning',
+        message: tMain(locale, 'permRevokeTitle', permName),
+        detail: tMain(locale, 'permRevokeDetail'),
+        buttons: [tMain(locale, 'cancel'), tMain(locale, 'revokeAndReload')],
+        defaultId: 0,
+        cancelId: 0,
       });
       if (response !== 1 || !isCurrent()) return;
     }
@@ -80,14 +86,14 @@ export class SitePermissions {
   }
 }
 
-function chooseDisplaySource(window, sources) {
+function chooseDisplaySource(window, sources, locale) {
   return new Promise(resolve => {
     let selected;
     const items = sources.map(source => ({
-      label: source.name.replaceAll('&', '&&').slice(0, 130) || '未命名窗口',
+      label: source.name.replaceAll('&', '&&').slice(0, 130) || tMain(locale, 'unnamedWindow'),
       click: () => { selected = source; resolve(source); },
     }));
-    items.push({ type: 'separator' }, { label: '取消共享', click: () => resolve(null) });
+    items.push({ type: 'separator' }, { label: tMain(locale, 'cancelShare'), click: () => resolve(null) });
     Menu.buildFromTemplate(items).popup({
       window, callback: () => setImmediate(() => resolve(selected ?? null)),
     });
@@ -139,14 +145,16 @@ export function installSitePermissions(session, engine, window) {
         callback(false);
         return;
       }
-      // In Electron 45 legacy capture also uses display-capture but skips the source picker.
-      // Require native confirmation before granting either path.
+      const locale = engine.locale || 'zh-CN';
       const epoch = tab.epoch;
       displayPromptOpen = true;
       dialog.showMessageBox(window, {
-        type: 'warning', message: '允许这一次屏幕共享？',
-        detail: origin + ' 请求共享屏幕或窗口。',
-        buttons: ['取消', '继续共享'], defaultId: 0, cancelId: 0,
+        type: 'warning',
+        message: tMain(locale, 'screenPromptTitle'),
+        detail: tMain(locale, 'screenPromptDetail', origin),
+        buttons: [tMain(locale, 'cancel'), tMain(locale, 'continueShare')],
+        defaultId: 0,
+        cancelId: 0,
       }).then(({ response }) => {
         const allowed = response === 1 && tab.epoch === epoch &&
           Boolean(findTab(contents, origin, details, true)) && store.has(origin, 'screen');
@@ -183,8 +191,9 @@ export function installSitePermissions(session, engine, window) {
       return;
     }
     choosingDisplay = true;
+    const locale = engine.locale || 'zh-CN';
     desktopCapturer.getSources({ types: ['screen', 'window'], thumbnailSize: { width: 0, height: 0 } })
-      .then(sources => sources.length && canShare() ? chooseDisplaySource(window, sources) : null)
+      .then(sources => sources.length && canShare() ? chooseDisplaySource(window, sources, locale) : null)
       .then(source => source && canShare() ? { video: source } : null)
       .catch(() => null)
       .then(streams => {

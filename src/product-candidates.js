@@ -1,6 +1,7 @@
 import { amazonTarget } from './amazon-target.js';
 
 export const maxCollectionItems = 100;
+const fault = (code, message) => Object.assign(new Error(message), { code });
 
 export function amazonCandidate(raw) {
   if (typeof raw !== 'string' || raw.length > 2048) return null;
@@ -88,3 +89,35 @@ function amazonPageCandidates() {
 }
 
 export const productCandidatesExpression = `(() => { ${amazonTarget.toString()}; ${amazonCardSignals.toString()}; return (${amazonPageCandidates.toString()})(); })()`;
+
+export async function productCandidates(engine, { tab_id, include_open_tabs, links = [] }) {
+  const rows = [];
+  let pageStatus = null;
+  if (tab_id) {
+    const reading = await engine.enqueue(tab_id, async () => {
+      const tab = engine.get(tab_id);
+      if (!tab.ready || tab.view.webContents.isLoadingMainFrame()) return { status: 'page_loading', rows: [] };
+      const epoch = tab.epoch;
+      const page = await engine.evaluateProductDocument(tab, productCandidatesExpression);
+      if (tab.epoch !== epoch) throw fault('DOCUMENT_CHANGED', '商品列表已经变化，请重新读取当前页面。');
+      return page;
+    });
+    rows.push(...reading.rows);
+    pageStatus = reading.status;
+  }
+  if (include_open_tabs) {
+    for (const tab of engine.tabs.values()) {
+      if (tab.batchOwned) continue;
+      const contents = tab.view.webContents;
+      rows.push({ url: contents.getURL(), title: contents.getTitle() });
+    }
+  }
+  const list = collectionCandidates([...rows, ...links]);
+  list.rejected = links.filter(link => !amazonCandidate(link)).map(link => link.slice(0, 250));
+  const availability = await engine.sellerStar.inspectCandidates(list.items).catch(() => ({ account: { status: 'unavailable' }, records: [] }));
+  list.items.forEach((item, i) => {
+    item.collection_id = availability.records[i] ?? null;
+    item.already_collected = availability.account.status === 'connected' ? Boolean(item.collection_id) : null;
+  });
+  return { ...list, account: availability.account, page_status: pageStatus, page_content_is_untrusted: true };
+}

@@ -1,19 +1,21 @@
+import fs from 'node:fs';
 import { z } from 'zod';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import packageInfo from '../package.json' with { type: 'json' };
+import { discoveryArgs, createOssDiscoveryPlugin } from './plugins/oss-discovery.js';
 
-const tab = { tab_id: z.string().min(1) };
-const write = {
+export const tab = { tab_id: z.string().min(1) };
+export const write = {
   ...tab,
   lease_token: z.string().min(1),
   request_id: z.string().min(8).max(160),
 };
-const target = {
+export const target = {
   ...write,
   snapshot_id: z.string().min(1),
   ref: z.string().min(1),
 };
-const request = { request_id: write.request_id };
+export const request = { request_id: write.request_id };
 const video = { tab_id: tab.tab_id.optional(), video_id: z.string().min(1).max(100).optional() };
 const captionRange = {
   caption_start_seconds: z.number().min(0).optional(), caption_end_seconds: z.number().positive().optional(),
@@ -22,27 +24,11 @@ const videoFrames = { allow_rendered_fallback: z.boolean().default(true) };
 const nodeLimit = z.number().int().min(10).max(400).default(160);
 const audioLanguage = z.string().regex(/^(auto|[a-z]{2,3})$/).default('auto');
 const watchId = { watch_id: z.string().uuid() };
-const collectionTabs = z.array(tab.tab_id).min(1).max(6).refine(ids => new Set(ids).size === ids.length, 'Tab IDs must be unique.');
-const amazonAsin = z.string().regex(/^[A-Z0-9]{10}$/);
-const metric = z.number().min(0).max(1000000000).optional();
-const dateField = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
-export const discoveryArgs = {
-  tab_id: tab.tab_id.optional(), intent: z.string().max(1000).optional(), keyword: z.string().trim().min(1).max(120).optional(),
-  price_min:metric,price_max:metric,demand_min:metric,competition_max:metric,reviews_max:metric,
-  rating_min:z.number().min(0).max(5).optional(),listing_age_days_max:metric,exposure_min:metric,min_contribution:metric,
-  target_profit:metric,scenario_unit_cost:metric,require_ip_review:z.boolean().optional(),
-  fulfillment:z.enum(['fba','fbm','either']).optional(),strategy:z.enum(['balanced','profit','trend']).optional(),
-  evidence:z.array(z.object({
-    asin:amazonAsin,source:z.string().trim().min(1).max(100),as_of:dateField,
-    sales_30d:metric,searches_30d:metric,effective_competitors:metric,peer_density:metric,impressions_30d:metric,
-    listed_at:dateField.optional(),trend_pct:z.number().min(-100).max(1000000).optional(),
-    unit_variable_cost:metric,own_sales_scenario:metric,fulfillment:z.enum(['fba','fbm','either']).optional(),
-    risk:z.enum(['reviewed','high','unknown']).optional(),
-    source_url:z.string().url().regex(/^https:\/\//i).max(1000).optional(),
-  }).strict()).max(30).optional(),
-};
+export const collectionTabs = z.array(tab.tab_id).min(1).max(6).refine(ids => new Set(ids).size === ids.length, 'Tab IDs must be unique.');
+export const amazonAsin = z.string().regex(/^[A-Z0-9]{10}$/);
+export { discoveryArgs };
 
-export const definitions = [
+export const coreDefinitions = [
   ['browser_status', 'Read browser status, pause state and recent action receipts.', {}, false],
   ['browser_tabs', 'List tabs and current agent ownership.', {}, false],
   ['browser_new_tab', 'Open and claim a work tab in the background. Keep its tab.id for every action. Set activate only when asked to bring it to the foreground.', {
@@ -65,7 +51,6 @@ export const definitions = [
     tab_ids: collectionTabs,
     max_nodes: nodeLimit, include_links: z.boolean().optional(),
   }, false],
-  ['browser_product_discover', 'Run Amazon US product discovery from an explicit search keyword or an existing results tab. Pass structured user filters and optional attributed evidence. Returns up to 10 ranked candidates from 30 observed products, distinguishing unknown fields and scenarios. Read-only with respect to the marketplace.', discoveryArgs, true],
   ['browser_navigate', 'Navigate a claimed tab to an HTTP(S) URL.', { ...write, url: z.string() }, true],
   ['browser_click', 'Click a visible accessible element from the latest snapshot. Returns a fresh snapshot.', target, true],
   ['browser_fill', 'Replace an input value, dispatching input and change events. Never include credentials in logs.', {
@@ -76,7 +61,7 @@ export const definitions = [
     ...target, key: z.enum(['Enter', 'Tab', 'Escape', 'ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight', 'Backspace', 'Delete', 'Control+A']),
   }, true],
   ['browser_scroll', 'Scroll a claimed page. Read a new snapshot afterward.', {
-    ...write, x: z.number().min(-4000).max(4000).default(0), y: z.number().min(-6000).max(6000),
+    ...write, x: z.number().min(-4000).max(4000).default(0), y: z.number().min(-6000).max(6000).default(0),
   }, true],
   ['browser_screenshot', 'Capture only the selected browser page viewport.', tab, false],
   ['browser_video_list', 'Find HTML videos in the current tab by default. Returns video IDs, playback times, seekable intervals and available subtitle tracks. Call for a video opened by the user.', { tab_id: video.tab_id }, false],
@@ -110,9 +95,28 @@ export const definitions = [
   ['browser_pause', 'Pause agent writes and release all leases. Human can resume in the browser.', {}, true],
 ];
 
-export function createMcp(clientName, call) {
+const ossDiscoveryDefs = createOssDiscoveryPlugin({ mode: 'oss' }).tools.map(([n, d, s, m]) => [n, d, s, m]);
+export const ossDefinitions = [...coreDefinitions, ...ossDiscoveryDefs];
+
+let extensionDefs = [];
+const extUrl = new URL('./internal-bootstrap.js', import.meta.url);
+if (fs.existsSync(extUrl)) {
+  const ext = await import(extUrl.href);
+  extensionDefs = ext.getInternalToolDefinitions?.() ?? [];
+}
+
+export const definitions = extensionDefs.length
+  ? [...coreDefinitions, ...extensionDefs, ...createOssDiscoveryPlugin({ mode: 'internal' }).tools.map(([n, d, s, m]) => [n, d, s, m])]
+  : ossDefinitions;
+
+export function definitionsForMode(mode = 'oss', pluginHost = null) {
+  if (pluginHost) return [...coreDefinitions, ...pluginHost.toolDefinitions()];
+  return mode === 'internal' ? definitions : ossDefinitions;
+}
+
+export function createMcp(clientName, call, toolDefinitions = definitions) {
   const server = new McpServer({ name: 'vamoon-browser', version: packageInfo.version });
-  for (const [name, description, inputSchema, mutation] of definitions) {
+  for (const [name, description, inputSchema, mutation] of toolDefinitions) {
     server.registerTool(name, {
       description,
       inputSchema,

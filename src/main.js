@@ -7,31 +7,43 @@ import packageInfo from '../package.json' with { type: 'json' };
 import { BrowserEngine, installEditMenu } from './engine.js';
 import { startService } from './service.js';
 import { installSitePermissions } from './site-permissions.js';
+import { resolveDataDir, resolveDownloadDir } from './paths.js';
+import { resolveLocale, saveLocale } from './i18n.js';
+import { createPluginHost, loadOptionalExtensionModule, resolveMode } from './plugins/index.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 function argument(name) {
   const at = process.argv.indexOf(name);
   return at < 0 ? null : process.argv[at + 1];
 }
-const dataDir = argument('--data-dir') || path.join(app.getPath('appData'), 'VA Commerce Browser OSS');
+
+const mode = resolveMode(argument('--mode'));
+const dataDir = resolveDataDir({ explicitDir: argument('--data-dir'), mode });
 fs.mkdirSync(dataDir, { recursive: true });
 app.setPath('userData', dataDir);
 if (process.platform === 'win32') app.setAppUserModelId(process.execPath);
 if (!app.requestSingleInstanceLock()) app.quit();
+
 let window;
 let engine;
 let service;
+let relay;
 const runtimePath = path.join(dataDir, 'runtime.json');
+
 function saveTabs() {
   if (!engine) return;
   const tabs = [...engine.tabs.values()].filter(t => !t.view.webContents.isDestroyed() && (!t.batchOwned || t.id === engine.active));
   if (!tabs.length) return;
-  fs.writeFileSync(path.join(dataDir, 'tabs.json'), JSON.stringify({ urls: tabs.map(t => t.view.webContents.getURL()), active_index: tabs.findIndex(t => t.id === engine.active) }), { mode: 0o600 });
+  fs.writeFileSync(path.join(dataDir, 'tabs.json'), JSON.stringify({
+    urls: tabs.map(t => t.view.webContents.getURL()),
+    active_index: tabs.findIndex(t => t.id === engine.active),
+  }), { mode: 0o600 });
 }
 
 app.on('second-instance', () => { window?.restore(); window?.focus(); });
+
 app.whenReady().then(async () => {
-  if (process.platform === 'win32' && !argument('--data-dir')) {
+  if (process.platform === 'win32' && !argument('--data-dir') && mode === 'internal') {
     const programs = path.join(app.getPath('appData'), 'Microsoft', 'Windows', 'Start Menu', 'Programs');
     const shortcut = path.join(programs, packageInfo.productName + '.lnk');
     try {
@@ -45,26 +57,55 @@ app.whenReady().then(async () => {
       }
     } catch { console.warn('Could not register browser notifications with Windows.'); }
   }
+
+  const locale = resolveLocale({ explicitLang: argument('--lang'), dataDir });
+  const downloadDir = resolveDownloadDir({
+    explicitDir: argument('--download-dir'),
+    electronDownloads: app.getPath('downloads'),
+    mode,
+  });
+
   window = new BrowserWindow({
-    title: packageInfo.productName, width: 1400, height: 940, minWidth: 960, minHeight: 640,
+    title: mode === 'oss' ? 'VA Commerce Browser' : packageInfo.productName,
+    width: 1400, height: 940, minWidth: 960, minHeight: 640,
     backgroundColor: '#eef2f3', autoHideMenuBar: true,
     webPreferences: { preload: path.join(here, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true },
   });
+
   const browserSession = session.fromPartition('persist:internal-browser');
+  const ext = mode === 'internal' ? await loadOptionalExtensionModule() : null;
+  const extensionContext = ext?.createInternalSessionContext?.(browserSession) ?? {};
+  const plugins = await createPluginHost({ mode, extensionContext });
+
   engine = new BrowserEngine(window, dataDir, state => {
     if (!window.isDestroyed()) window.webContents.send('browser-state', state);
-  });
+  }, { mode, locale, plugins, sellerStar: extensionContext.sellerStar ?? null });
+
   window.on('resize', () => engine.layout());
   window.on('close', saveTabs);
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', event => event.preventDefault());
-  installEditMenu(window, window.webContents, () => true);
+  installEditMenu(window, window.webContents, () => true, () => engine.locale);
+
   ipcMain.handle('browser-ui', async (event, command, payload = {}) => {
-    if (event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame) throw new Error('Invalid UI sender');
+    if (event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame) {
+      throw new Error('Invalid UI sender');
+    }
     if (command === 'state') return engine.state();
     if (command === 'pause') { engine.pause(); return engine.state(); }
-    if (command === 'resume') { engine.paused = false; engine.emit(); return engine.state(); }
+    if (command === 'resume') { engine.resume(); return engine.state(); }
+    if (command === 'set-locale') {
+      engine.locale = saveLocale(dataDir, payload.locale);
+      engine.emit();
+      return engine.state();
+    }
     if (command === 'new') return engine.newTab(payload.url || 'about:blank').then(t => engine.describe(t));
+
+    if (engine.plugins.hasIpc(command)) {
+      const handled = await engine.plugins.handleIpc(command, payload, { engine, window, downloadDir });
+      if (handled.handled) return handled.result;
+    }
+
     const tab = engine.get(payload.tab_id || engine.active);
     if (command === 'switch') return engine.activate(tab.id);
     if (command === 'set-site-permission') {
@@ -76,7 +117,6 @@ app.whenReady().then(async () => {
       tab.view.webContents.focus();
       return engine.state();
     }
-    // Direct human navigation takes the tab back from the agent.
     tab.lease = null;
     tab.snapshot = null;
     return engine.enqueue(tab.id, async () => {
@@ -93,23 +133,29 @@ app.whenReady().then(async () => {
       return engine.state();
     });
   });
+
   installSitePermissions(browserSession, engine, window);
   browserSession.on('will-download', (_event, item, contents) => {
-    const directory = argument('--download-dir') || path.join(app.getPath('downloads'), 'VA Commerce Browser OSS');
-    fs.mkdirSync(directory, { recursive: true });
+    fs.mkdirSync(downloadDir, { recursive: true });
     const filename = path.basename(item.getFilename()).replace(/[<>:"/\\|?*]/g, '_');
-    const destination = path.join(directory, Date.now() + '-' + filename);
+    const destination = path.join(downloadDir, Date.now() + '-' + filename);
     item.setSavePath(destination);
     const tab = [...engine.tabs.values()].find(tab => tab.view.webContents === contents);
     const record = { id: randomBytes(8).toString('hex'), tab_id: tab?.id ?? null, filename, path: destination, state: 'progressing' };
     engine.downloads.push(record);
     item.once('done', (_ev, state) => { record.state = state; engine.emit(); });
   });
+
   const token = randomBytes(32).toString('hex');
   service = await startService(engine, token, Number(argument('--port') ?? 18773));
   fs.writeFileSync(runtimePath, JSON.stringify({
-    pid: process.pid, endpoint: 'http://127.0.0.1:' + service.port, token, started_at: new Date().toISOString(),
+    pid: process.pid, endpoint: 'http://127.0.0.1:' + service.port, token, mode, started_at: new Date().toISOString(),
   }), { mode: 0o600 });
+
+  relay = ext?.maybeStartCloudRelay?.({
+    dataDir, engine, testLocalRelay: process.argv.includes('--test-local-relay'),
+  }) ?? null;
+
   await window.loadFile(path.join(here, 'ui', 'index.html'));
   let restore;
   try { restore = JSON.parse(fs.readFileSync(path.join(dataDir, 'tabs.json'), 'utf8')); } catch {}
@@ -127,9 +173,12 @@ app.whenReady().then(async () => {
   fs.appendFileSync(path.join(dataDir, 'startup-error.log'), new Date().toISOString() + ' ' + error.stack + '\n');
   app.quit();
 });
+
 app.on('window-all-closed', () => app.quit());
 app.on('before-quit', () => {
+  relay?.close();
   engine?.watches.endAll('browser_closed');
+  engine?.plugins.onBeforeQuit(engine);
   saveTabs();
   service?.server.close();
   try {

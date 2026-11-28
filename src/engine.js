@@ -6,7 +6,10 @@ import packageInfo from '../package.json' with { type: 'json' };
 import { runVideoTool } from './video-tools.js';
 import { TabWatches } from './tab-watches.js';
 import { SitePermissions, siteOrigin } from './site-permissions.js';
-import { discoverProducts } from './product-discovery.js';
+import { ReceiptStore } from './receipt-store.js';
+import { PluginHost } from './plugin-host.js';
+import { definitionsForMode } from './tools.js';
+import { tMain } from './i18n.js';
 
 const fault = (code, message) => Object.assign(new Error(message), { code });
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -17,9 +20,10 @@ const virtualKeys = { Enter: 13, Tab: 9, Escape: 27, ArrowLeft: 37, ArrowUp: 38,
   ArrowRight: 39, ArrowDown: 40, Backspace: 8, Delete: 46 };
 const clipboardGrantMs = 60_000;
 
-export function installEditMenu(window, contents, isCurrent) {
+export function installEditMenu(window, contents, isCurrent, getLocale = () => 'zh-CN') {
   contents.on('context-menu', (event, params) => {
     if (!isCurrent()) return;
+    const locale = getLocale();
     const { editFlags, isEditable, linkURL, hasImageContents, x, y } = params;
     const pageUrl = contents.getURL();
     const run = action => () => {
@@ -27,14 +31,14 @@ export function installEditMenu(window, contents, isCurrent) {
     };
     const items = [];
     const add = (label, enabled, action) => items.push({ label, enabled, click: run(action) });
-    if (isEditable) add('剪切', editFlags.canCut, () => contents.cut());
-    if (isEditable || editFlags.canCopy) add('复制', editFlags.canCopy, () => contents.copy());
-    if (isEditable) add('粘贴', editFlags.canPaste, () => contents.paste());
-    if (editFlags.canSelectAll) add('全选', true, () => contents.selectAll());
-    if (/^https?:\/\//i.test(linkURL)) add('复制链接地址', true, () => {
-      clipboard.writeText(linkURL).catch(() => {});
+    if (isEditable) add(tMain(locale, 'cut'), editFlags.canCut, () => contents.cut());
+    if (isEditable || editFlags.canCopy) add(tMain(locale, 'copy'), editFlags.canCopy, () => contents.copy());
+    if (isEditable) add(tMain(locale, 'paste'), editFlags.canPaste, () => contents.paste());
+    if (editFlags.canSelectAll) add(tMain(locale, 'selectAll'), true, () => contents.selectAll());
+    if (/^https?:\/\//i.test(linkURL)) add(tMain(locale, 'copyLink'), true, () => {
+      try { clipboard.writeText(linkURL); } catch {}
     });
-    if (hasImageContents) add('复制图片', true, () => contents.copyImageAt(x, y));
+    if (hasImageContents) add(tMain(locale, 'copyImage'), true, () => contents.copyImageAt(x, y));
     if (!items.length) return;
     event.preventDefault();
     Menu.buildFromTemplate(items).popup({ window });
@@ -42,10 +46,18 @@ export function installEditMenu(window, contents, isCurrent) {
 }
 
 export class BrowserEngine {
-  constructor(window, dataDir, onChange) {
+  constructor(window, dataDir, onChange, optionsOrSellerStar = {}) {
+    const isOptions = optionsOrSellerStar && typeof optionsOrSellerStar === 'object' &&
+      ('plugins' in optionsOrSellerStar || 'mode' in optionsOrSellerStar || 'locale' in optionsOrSellerStar || 'sellerStar' in optionsOrSellerStar);
+    const options = isOptions ? optionsOrSellerStar : { sellerStar: optionsOrSellerStar };
+
     this.window = window;
     this.dataDir = dataDir;
     this.onChange = onChange;
+    this.mode = options.mode === 'oss' ? 'oss' : 'internal';
+    this.locale = options.locale || 'zh-CN';
+    this.plugins = options.plugins instanceof PluginHost ? options.plugins : new PluginHost();
+    this.sellerStar = options.sellerStar ?? null;
     this.tabs = new Map();
     this.active = null;
     this.paused = false;
@@ -66,37 +78,55 @@ export class BrowserEngine {
     } catch (error) {
       if (error.code !== 'ENOENT') console.warn('Could not load clipboard site preferences.');
     }
-    this.journalPath = path.join(dataDir, 'receipts.json');
-    this.receipts = fs.existsSync(this.journalPath)
-      ? JSON.parse(fs.readFileSync(this.journalPath, 'utf8')) : {};
-    if (Object.values(this.receipts).some(r => ['claimed', 'unknown'].includes(r.status))) this.paused = true;
+    this.receiptStore = new ReceiptStore(dataDir, { maxHotReceipts: options.maxHotReceipts });
+    this.journalPath = this.receiptStore.journalPath;
+    this.receipts = this.receiptStore.records;
+    if (this.receiptStore.hasUncertain()) this.paused = true;
+    this.plugins.onEngineInit(this);
+  }
+
+  toolDefinitions() {
+    return definitionsForMode(this.mode, this.plugins);
   }
 
   emit() { this.onChange?.(this.state()); }
+
   save() {
-    const temporary = this.journalPath + '.tmp';
-    fs.writeFileSync(temporary, JSON.stringify(this.receipts), { mode: 0o600 });
-    fs.renameSync(temporary, this.journalPath);
+    this.receiptStore.save();
   }
+
   state() {
     return {
-      app: packageInfo.productName, version: packageInfo.version, paused: this.paused, active: this.active,
+      app: packageInfo.productName,
+      version: packageInfo.version,
+      mode: this.mode,
+      locale: this.locale,
+      plugins: this.plugins.ids(),
+      enabled_panels: this.plugins.enabledPanels(),
+      paused: this.paused,
+      active: this.active,
+      ...this.plugins.describeState(this),
       tabs: [...this.tabs.values()].map(t => this.describe(t)),
       clients: [...this.clients].map(([name, at]) => ({ name, at })),
-      receipts: Object.values(this.receipts).slice(-30).map(({ request_id, tool, status, at, client, tab_id, error }) => (
-        { request_id, tool, status, at, client, tab_id, error }
-      )),
+      receipts: this.receiptStore.recent(30),
       downloads: this.downloads.slice(-30),
     };
   }
+
   describe(t) {
     const lease = t.lease?.expires > Date.now() ? t.lease : null;
     const url = t.view.webContents.getURL();
     const origin = siteOrigin(url);
-    return { id: t.id, title: t.view.webContents.getTitle() || '新标签页',
-      url, zoom: t.view.webContents.getZoomFactor(),
+    return {
+      id: t.id,
+      title: t.view.webContents.getTitle() || tMain(this.locale, 'newTab'),
+      url,
+      zoom: t.view.webContents.getZoomFactor(),
       collection_tab: Boolean(t.batchOwned),
-      owner: lease?.client || null, active: this.active === t.id, opener_tab_id: t.openerId ?? null,
+      ...this.plugins.describeTab(this, t),
+      owner: lease?.client || null,
+      active: this.active === t.id,
+      opener_tab_id: t.openerId ?? null,
       clipboard_write_available: Boolean(origin),
       clipboard_write_allowed: this.clipboardAllowed(t, url),
       clipboard_write_remembered: this.clipboardSites.has(origin),
@@ -104,9 +134,12 @@ export class BrowserEngine {
       site_permissions: this.sitePermissions.describe(origin),
       collecting: this.collectionJobs.has(t.id),
       watching: this.watches.modesFor(t.id),
-      loading: t.view.webContents.isLoading(), ready: t.ready,
-      viewport: { width: t.view.getBounds().width, height: t.view.getBounds().height } };
+      loading: t.view.webContents.isLoading(),
+      ready: t.ready,
+      viewport: { width: t.view.getBounds().width, height: t.view.getBounds().height },
+    };
   }
+
   clipboardAllowed(t, requestingUrl) {
     const origin = siteOrigin(requestingUrl);
     if (!origin || !t || t.id !== this.active || origin !== siteOrigin(t.view.webContents.getURL())) return false;
@@ -114,9 +147,10 @@ export class BrowserEngine {
     const grant = t.clipboardGrant;
     return Boolean(grant && grant.epoch === t.epoch && grant.expiresAt > Date.now() && grant.origin === origin);
   }
+
   toggleClipboard(t, remember = false) {
     const origin = siteOrigin(t.view.webContents.getURL());
-    if (t.id !== this.active || !origin) throw fault('CLIPBOARD_UNAVAILABLE', '请在当前 HTTPS 页面开启复制。');
+    if (t.id !== this.active || !origin) throw fault('CLIPBOARD_UNAVAILABLE', tMain(this.locale, 'clipboardHttpsOnly'));
     if (remember) {
       const sites = new Set(this.clipboardSites);
       if (sites.has(origin)) sites.delete(origin);
@@ -141,16 +175,19 @@ export class BrowserEngine {
     }, clipboardGrantMs).unref();
     this.emit();
   }
+
   allowClipboardPermission(webContents, permission, origin, details) {
     if (!webContents || permission !== 'clipboard-sanitized-write' || details?.isMainFrame !== true) return false;
     const t = this.tabs.get(this.active);
     return t?.view.webContents === webContents && this.clipboardAllowed(t, origin);
   }
+
   get(id) {
     const t = this.tabs.get(id);
     if (!t || t.view.webContents.isDestroyed()) throw fault('TAB_NOT_FOUND', 'Tab no longer exists. List tabs again.');
     return t;
   }
+
   validateUrl(raw) {
     if (raw === 'about:blank') return raw;
     const url = new URL(raw);
@@ -159,6 +196,7 @@ export class BrowserEngine {
     }
     return url.href;
   }
+
   async newTab(raw, { activate = true, openerId = null, batchOwned = false } = {}) {
     const url = this.validateUrl(raw);
     const view = new WebContentsView({ webPreferences: {
@@ -169,7 +207,7 @@ export class BrowserEngine {
     const t = { id: randomUUID(), view, epoch: 0, snapshot: null, lease: null, ready: false, openerId, batchOwned, sitePermissionUse: new Set() };
     this.tabs.set(t.id, t);
     const wc = view.webContents;
-    installEditMenu(this.window, wc, () => this.active === t.id);
+    installEditMenu(this.window, wc, () => this.active === t.id, () => this.locale);
     wc.setWindowOpenHandler(({ url: popupUrl }) => {
       if (t.batchOwned) return { action: 'deny' };
       this.newTab(popupUrl, { activate: this.active === t.id && !t.lease, openerId: t.id }).catch(() => {});
@@ -209,6 +247,7 @@ export class BrowserEngine {
     this.emit();
     return t;
   }
+
   activate(id) {
     const previous = this.tabs.get(this.active);
     if (previous && previous.id !== id) previous.clipboardGrant = null;
@@ -217,6 +256,7 @@ export class BrowserEngine {
     this.updateVisibility();
     this.emit();
   }
+
   updateVisibility() {
     const front = this.tabs.get(this.active);
     if (front) this.window.contentView.addChildView(front.view);
@@ -224,12 +264,14 @@ export class BrowserEngine {
       t.view.setVisible(t === front || this.renderingTabs.has(t.id));
     }
   }
+
   layout() {
     const [width, height] = this.window.getContentSize();
     for (const t of this.tabs.values()) {
       t.view.setBounds({ x: 0, y: 110, width: Math.max(300, width - 290), height: Math.max(160, height - 110) });
     }
   }
+
   async command(t, method, args = {}, { timeoutMs = 20_000 } = {}) {
     let timer;
     try {
@@ -241,6 +283,7 @@ export class BrowserEngine {
       ]);
     } finally { clearTimeout(timer); }
   }
+
   claim(t, client) {
     if (this.paused) throw fault('PAUSED', 'Paused by human. Resume from browser UI.');
     if (t.lease?.expires > Date.now() && t.lease.client !== client) {
@@ -250,6 +293,7 @@ export class BrowserEngine {
     this.emit();
     return { tab: this.describe(t), lease_token: t.lease.token, expires_at: new Date(t.lease.expires).toISOString() };
   }
+
   requireLease(t, args, client) {
     if (this.paused) throw fault('PAUSED', 'Paused by human. Resume from browser UI.');
     if (!t.lease || t.lease.client !== client || t.lease.token !== args.lease_token || t.lease.expires <= Date.now()) {
@@ -257,13 +301,22 @@ export class BrowserEngine {
     }
     t.lease.expires = Date.now() + 180000;
   }
+
   pause() {
     this.paused = true;
     this.pauseGeneration++;
     for (const t of this.tabs.values()) t.lease = null;
     this.watches.endAll('browser_paused');
+    this.plugins.onPause(this, 'browser_paused');
     this.emit();
   }
+
+  resume() {
+    this.paused = false;
+    this.plugins.onResume(this);
+    this.emit();
+  }
+
   async snapshot(t, maxNodes = 160, registerRefs = true, options = {}) {
     if (!t.ready) throw fault('TAB_LOADING', 'Page is initializing. Read tabs again when ready is true.');
     const epoch = t.epoch;
@@ -338,7 +391,7 @@ export class BrowserEngine {
     for (const nodeId of numberNodes.slice(0, 80)) {
       const { node } = await this.command(t, 'DOM.describeNode', { nodeId });
       if (referencedNodes.has(node.backendNodeId)) continue;
-      const attrs = Object.fromEntries((node.attributes || []).flatMap((item, i, all) => i%2===0 ? [[item,all[i+1]]] : []));
+      const attrs = Object.fromEntries((node.attributes || []).flatMap((item, i, all) => i % 2 === 0 ? [[item, all[i + 1]]] : []));
       if (attrs.type && !['text', 'number'].includes(attrs.type.toLowerCase())) continue;
       const number = await this.element(t, node.backendNodeId, `function(){
         if(!['number','text'].includes(this.type) || this.autocomplete==='one-time-code' ||
@@ -377,6 +430,7 @@ export class BrowserEngine {
     return { tab: this.describe(t), snapshot_id: id, page_content_is_untrusted: true,
       elements: content, truncated: filtered ? truncated : content.length >= maxNodes };
   }
+
   async collectBatch(args) {
     return this.collectTabs(args.tab_ids, async (tab, tabId) => {
       const content = await this.snapshot(tab, args.max_nodes, false, { includeLinks: args.include_links === true });
@@ -394,6 +448,7 @@ export class BrowserEngine {
       return row;
     });
   }
+
   async collectTabs(tabIds, read) {
     const results = await Promise.all(tabIds.map(tabId =>
       this.enqueue(tabId, async () => {
@@ -412,15 +467,22 @@ export class BrowserEngine {
       })));
     return { captured_at: new Date().toISOString(), page_content_is_untrusted: true, results };
   }
-  async evaluateProductDocument(tab, expression) {
+
+  async evaluateProductDocument(tab, expression, { worldName = 'vamoon-product-collection', mainWorld = false } = {}) {
+    if (mainWorld) {
+      const capture = await this.command(tab, 'Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true });
+      if (capture.exceptionDetails) throw fault('PRODUCT_READ_FAILED', 'Document data could not be read.');
+      return capture.result?.value;
+    }
     const { frameTree } = await this.command(tab, 'Page.getFrameTree');
     const { executionContextId } = await this.command(tab, 'Page.createIsolatedWorld', {
-      frameId: frameTree.frame.id, worldName: 'vamoon-product-collection',
+      frameId: frameTree.frame.id, worldName,
     });
-    const capture = await this.command(tab, 'Runtime.evaluate', { expression, contextId: executionContextId, returnByValue: true });
-    if (capture.exceptionDetails || !capture.result?.value) throw fault('PRODUCT_READ_FAILED', 'Amazon product data could not be read.');
+    const capture = await this.command(tab, 'Runtime.evaluate', { expression, contextId: executionContextId, returnByValue: true, awaitPromise: true });
+    if (capture.exceptionDetails || !capture.result?.value) throw fault('PRODUCT_READ_FAILED', 'Product data could not be read.');
     return capture.result.value;
   }
+
   backend(t, args) {
     if (!t.snapshot || args.snapshot_id !== t.snapshot.id || t.snapshot.epoch !== t.epoch) {
       throw fault('STALE_SNAPSHOT', 'Page or snapshot changed. Read browser_snapshot again.');
@@ -429,6 +491,7 @@ export class BrowserEngine {
     if (!id) throw fault('REF_NOT_FOUND', 'Element is not in current snapshot.');
     return id;
   }
+
   async element(t, backendNodeId, functionDeclaration, values = []) {
     const { object } = await this.command(t, 'DOM.resolveNode', { backendNodeId });
     try {
@@ -442,18 +505,22 @@ export class BrowserEngine {
       if (object.objectId) await this.command(t, 'Runtime.releaseObject', { objectId: object.objectId }).catch(() => {});
     }
   }
+
   async click(t, id, guard) {
     await this.withTabInput(t, async () => {
       const box = await this.element(t, id, `async function(){
         this.scrollIntoView({block:'center',inline:'center'});
         await Promise.race([new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))),new Promise(resolve=>setTimeout(resolve,250))]);
         const r=this.getBoundingClientRect();
-        if(this.disabled || r.width<1 || r.height<1) throw Error('Element is disabled or hidden');
+        if(this.disabled || r.width<1 || r.height<1) return {blocked:'ELEMENT_NOT_INTERACTABLE'};
         const x=r.x+r.width/2,y=r.y+r.height/2;
         const front=this.ownerDocument.elementFromPoint(x,y);
-        if(front && front!==this && !this.contains(front)) throw Error('Element is covered');
+        if(front && front!==this && !this.contains(front)) return {blocked:'ELEMENT_COVERED'};
         return {x,y};
       }`);
+      if (box?.blocked) throw fault(box.blocked, box.blocked === 'ELEMENT_COVERED'
+        ? 'Element is covered. Read a fresh snapshot before choosing the next action.'
+        : 'Element is disabled or hidden. Read a fresh snapshot when the page is ready.');
       guard();
       await this.command(t, 'Input.dispatchMouseEvent', { type: 'mouseMoved', ...box });
       guard();
@@ -461,6 +528,7 @@ export class BrowserEngine {
       await this.command(t, 'Input.dispatchMouseEvent', { type: 'mouseReleased', ...box, button: 'left', clickCount: 1 });
     });
   }
+
   async withTabInput(t, action) {
     return this.withTabRendering(t, async () => {
       await this.command(t, 'Emulation.setFocusEmulationEnabled', { enabled: true });
@@ -468,9 +536,8 @@ export class BrowserEngine {
       finally { await this.command(t, 'Emulation.setFocusEmulationEnabled', { enabled: false }).catch(() => {}); }
     });
   }
+
   async withTabRendering(t, action) {
-    // Chromium input and screenshots need a rendered surface. Keep the user’s
-    // selected view on top while this background surface is in use.
     this.renderingTabs.add(t.id);
     this.updateVisibility();
     try { return await action(); }
@@ -479,6 +546,7 @@ export class BrowserEngine {
       if (!this.window.isDestroyed()) this.updateVisibility();
     }
   }
+
   async pressKey(t, id, key, guard) {
     await this.withTabInput(t, async () => {
       await this.element(t, id, 'function(){this.focus()}');
@@ -491,19 +559,23 @@ export class BrowserEngine {
       } finally { await this.command(t, 'Input.dispatchKeyEvent', { ...details, type: 'keyUp' }); }
     });
   }
-  async mutate(name, args, client, callback, persistResult = value => value) {
+
+  async mutate(name, args, client, callback, persistResult = value => value, extraEntry = null) {
     const key = client + ':' + args.request_id;
     const hash = createHash('sha256').update(JSON.stringify({ name, args })).digest('hex');
-    const old = this.receipts[key];
+    const old = this.receiptStore.get(key);
     if (old) {
       if (old.hash !== hash) throw fault('REQUEST_CONFLICT', 'request_id already used with different arguments.');
       if (old.status === 'claimed' || old.status === 'unknown') throw fault('OUTCOME_UNCERTAIN', 'Previous submission outcome is uncertain. Read page and receipts before another action.');
       if (old.error) throw fault(old.error.code, old.error.message);
       return { ...old.result, replayed: true };
     }
-    const entry = { hash, request_id: args.request_id, tool: name, tab_id: args.tab_id,
-      client, status: 'claimed', at: new Date().toISOString() };
-    this.receipts[key] = entry;
+    const entry = {
+      hash, request_id: args.request_id, tool: name, tab_id: args.tab_id,
+      client, status: 'claimed', at: new Date().toISOString(),
+      ...(extraEntry || {}),
+    };
+    this.receiptStore.set(key, entry);
     this.save();
     try {
       const result = await callback();
@@ -521,6 +593,7 @@ export class BrowserEngine {
       throw error;
     }
   }
+
   enqueue(tabId, operation) {
     const result = (this.queues.get(tabId) ?? Promise.resolve()).then(operation);
     const tail = result.catch(() => {});
@@ -532,25 +605,26 @@ export class BrowserEngine {
   async execute(name, args, client) {
     const run = () => this.dispatch(name, args, client);
     const scope = args.tab_id ?? (name === 'browser_video_list' || name === 'browser_video_read' ? this.active : null);
-    if (name.startsWith('browser_watch_') ||
+    if (name.startsWith('browser_watch_') || this.plugins.isUnscoped(name) ||
         ['browser_status', 'browser_tabs', 'browser_downloads', 'browser_receipt', 'browser_pause', 'browser_new_tab',
-          'browser_collect_batch', 'browser_product_discover'].includes(name)) {
+          'browser_collect_batch'].includes(name)) {
       return run();
     }
     if (scope !== null) args = { ...args, tab_id: scope };
     return this.enqueue(scope, run);
   }
+
   async dispatch(name, args, client) {
     this.clients.set(client, new Date().toISOString());
     this.emit();
     if (name === 'browser_receipt') {
-      const prior = this.receipts[client + ':' + args.request_id];
+      const prior = this.receiptStore.get(client + ':' + args.request_id);
       if (!prior) return { found: false, request_id: args.request_id };
       const { hash, ...receipt } = prior;
       return { found: true, ...receipt };
     }
     if (args.request_id) {
-      const previous = this.receipts[client + ':' + args.request_id];
+      const previous = this.receiptStore.get(client + ':' + args.request_id);
       if (previous) {
         const hash = createHash('sha256').update(JSON.stringify({ name, args })).digest('hex');
         if (previous.hash !== hash) throw fault('REQUEST_CONFLICT', 'request_id already used with different arguments.');
@@ -563,9 +637,12 @@ export class BrowserEngine {
     if (name === 'browser_tabs') return { tabs: this.state().tabs, active: this.active };
     if (name === 'browser_downloads') return { downloads: args.tab_id ? this.downloads.filter(row => row.tab_id === args.tab_id) : this.downloads };
     if (name === 'browser_collect_batch') return this.collectBatch(args);
-    if (name === 'browser_product_discover') return discoverProducts(this,args);
     if (name === 'browser_pause') { this.pause(); return { paused: true }; }
     if (name.startsWith('browser_watch_')) return this.watches.call(name, args, client);
+
+    const pluginResult = await this.plugins.dispatchTool(this, name, args, client);
+    if (pluginResult.handled) return pluginResult.result;
+
     if (name === 'browser_new_tab') {
       if (this.paused) throw fault('PAUSED', 'Paused by human.');
       const generation = this.pauseGeneration;
@@ -605,7 +682,6 @@ export class BrowserEngine {
     }
     this.requireLease(t, args, client);
     if (name === 'browser_video_seek_frames') {
-      // Player movement is transient, but the same request must not seek twice.
       return this.mutate(name, args, client, () => runVideoTool(this, t, name, args, client),
         ({ media, ...summary }) => ({ ...summary, replay_has_attachments: false,
           next_action: 'No image bytes were stored in this receipt. Issue a new read only if more evidence is needed.' }));
@@ -657,6 +733,7 @@ export class BrowserEngine {
       return { ...snapshot, receipt: { request_id: args.request_id, tool: name, at: new Date().toISOString() } };
     });
   }
+
   closeTab(id) {
     const t = this.get(id);
     this.watches.endTab(id, 'tab_closed');

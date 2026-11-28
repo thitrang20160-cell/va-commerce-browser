@@ -1,32 +1,80 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
 <head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:">
-<title>VA电商浏览器 AI版</title><link rel="stylesheet" href="style.css"></head>
+<title>VA Commerce Browser</title><link rel="stylesheet" href="style.css"></head>
 <body>
-<header><div class="brand"><span class="mark" aria-hidden="true">VA</span><strong>VA电商浏览器 AI版</strong></div><div id="tabs"></div><button id="new" title="新建标签页">＋</button></header>
-<nav><button id="back" title="后退">←</button><button id="forward" title="前进">→</button><button id="reload" title="刷新">↻</button>
-<form id="address-form"><input id="address" aria-label="网页地址" placeholder="输入网址，开始一个任务" autocomplete="off"></form>
+<header><div class="brand"><span class="mark" aria-hidden="true">VA</span><strong data-i18n="brandName">VA Commerce Browser</strong></div><div id="tabs"></div><button id="new" data-i18n-title="newTabTitle" title="New Tab">＋</button></header>
+<nav><button id="back" data-i18n-title="backTitle" title="Back">←</button><button id="forward" data-i18n-title="forwardTitle" title="Forward">→</button><button id="reload" data-i18n-title="reloadTitle" title="Reload">↻</button>
+<form id="address-form"><input id="address" data-i18n-aria="addressLabel" data-i18n-placeholder="addressPlaceholder" aria-label="URL" placeholder="Enter a URL to start a task" autocomplete="off"></form>
 <button id="zoom-out">−</button><span id="zoom">100%</span><button id="zoom-in">＋</button>
+<button id="discovery-toggle" class="batch-entry" type="button" aria-expanded="false" aria-controls="product-discovery" data-i18n="discoveryToggle">AI Discovery</button>
+<button id="lang-toggle" class="lang-btn" type="button" title="切换到简体中文">中文</button></nav>
 <aside>
-  <section><div class="eyebrow">AGENT WORKSPACE</div><h1>浏览器已就绪</h1><p id="ownership">选择标签页后，Agent 可以读取页面并执行任务。</p>
-  <button id="takeover" class="primary">暂停 / 人工接管</button><button id="resume" hidden>恢复 Agent 操作</button>
-  <button id="clipboard-write" class="clipboard-control" type="button" hidden title="允许当前页面的复制按钮写入剪贴板，60 秒后自动关闭">允许本页复制（60 秒）</button>
-  <button id="clipboard-site" class="clipboard-control" type="button" hidden>始终允许此网站复制</button></section>
+  <section id="product-discovery" class="collection-panel" hidden>
+    <h2 data-i18n="discoveryHeading">AI Product Discovery</h2>
+    <label for="discovery-intent" class="batch-label" data-i18n="discoveryIntentLabel">What product are you looking for?</label>
+    <textarea id="discovery-intent" rows="2" data-i18n-placeholder="discoveryIntentPlaceholder" placeholder="e.g. silicone under sink mat, $15-35, FBA"></textarea>
+    <label for="discovery-keyword" class="batch-label" data-i18n="discoveryKeywordLabel">Amazon Search Keyword (optional)</label>
+    <input id="discovery-keyword" type="text" placeholder="e.g. closet storage bins" maxlength="120">
+    <div class="discovery-two">
+      <div><label for="discovery-strategy" class="batch-label" data-i18n="discoveryStrategyLabel">Strategy</label>
+        <select id="discovery-strategy"><option value="" data-i18n="discoveryStrategyAuto">Auto from intent</option><option value="balanced" data-i18n="discoveryStrategyBalanced">Balanced</option><option value="profit" data-i18n="discoveryStrategyProfit">Profit first</option><option value="trend" data-i18n="discoveryStrategyTrend">Trend first</option></select></div>
+      <div><label for="discovery-fulfillment" class="batch-label" data-i18n="discoveryFulfillmentLabel">Fulfillment</label>
+        <select id="discovery-fulfillment"><option value="" data-i18n="discoveryFulfillmentAuto">Auto from intent</option><option value="fba" data-i18n="discoveryFulfillmentFba">FBA</option><option value="fbm" data-i18n="discoveryFulfillmentFbm">FBM</option><option value="either" data-i18n="discoveryFulfillmentEither">Any</option></select></div>
+    </div>
+    <details class="discovery-filters">
+      <summary data-i18n="discoveryFiltersSummary">Filters &amp; Unit Economics</summary>
+      <div class="discovery-two" id="discovery-metrics">
+        <label>Min Price $<input data-field="price_min" type="number" min="0" step=".01"></label>
+        <label>Max Price $<input data-field="price_max" type="number" min="0" step=".01"></label>
+        <label>Min Demand<input data-field="demand_min" type="number" min="0" step="1"></label>
+        <label>Max Competition<input data-field="competition_max" type="number" min="0" step=".01"></label>
+        <label>Min Rating<input data-field="rating_min" type="number" min="0" max="5" step=".1"></label>
+        <label>Max Reviews<input data-field="reviews_max" type="number" min="0" step="1"></label>
+        <label>Max Age (days)<input data-field="listing_age_days_max" type="number" min="0" step="1"></label>
+        <label>Min Impressions<input data-field="exposure_min" type="number" min="0" step="1"></label>
+        <label>Unit Cost $<input data-field="scenario_unit_cost" type="number" min="0" step=".01"></label>
+        <label>Min Contribution $<input data-field="min_contribution" type="number" min="0" step=".01"></label>
+        <label>Monthly Profit Target $<input data-field="target_profit" type="number" min="0" step=".01"></label>
+      </div>
+      <label class="discovery-risk"><input type="checkbox" id="discovery-ip"> <span data-i18n="discoveryIpOnly">Only IP-reviewed candidates</span></label>
+      <label for="discovery-evidence" class="batch-label" data-i18n="discoveryEvidenceLabel">Attributed Evidence JSON (optional)</label>
+      <textarea id="discovery-evidence" rows="2" data-i18n-placeholder="discoveryEvidencePlaceholder" placeholder="Array with asin, source, as_of, metrics"></textarea>
+    </details>
+    <div class="batch-actions discovery-actions">
+      <button type="button" id="discovery-search" class="primary" data-i18n="discoverySearch">Find Products</button>
+      <button type="button" id="discovery-current" data-i18n="discoveryCurrent">Analyze Current Amazon Tab</button>
+    </div>
+    <p class="muted" id="discovery-message" role="status"></p>
+    <div id="discovery-ranked" hidden>
+      <div class="batch-actions">
+        <button type="button" id="discovery-select" data-i18n="discoverySelectEligible">Select Eligible</button>
+        <button type="button" id="discovery-export-csv" data-i18n="discoveryExportCsv">Export CSV</button>
+        <button type="button" id="discovery-export-json" data-i18n="discoveryExportJson">Export JSON</button>
+      </div>
+      <div id="discovery-items" class="discovery-list"></div>
+      <button id="discovery-confirm" type="button" class="primary" hidden></button>
+    </div>
+  </section>
+  <section><div class="eyebrow" data-i18n="workspaceEyebrow">AGENT WORKSPACE</div><h1 data-i18n="workspaceHeading">Browser Ready</h1><p id="ownership">You control this tab. Ready for an agent to claim.</p>
+  <button id="takeover" class="primary" data-i18n="takeover">Pause / Take Over</button><button id="resume" hidden data-i18n="resume">Resume Agent Control</button>
+  <button id="clipboard-write" class="clipboard-control" type="button" hidden>Allow page copy (60s)</button>
+  <button id="clipboard-site" class="clipboard-control" type="button" hidden>Always allow site copy</button></section>
   <details id="site-permissions" hidden>
-    <summary>网站权限</summary>
+    <summary data-i18n="sitePermSummary">Site Permissions</summary>
     <p id="permission-origin" class="muted"></p>
-    <label><input type="checkbox" name="camera"> 摄像头</label>
-    <label><input type="checkbox" name="microphone"> 麦克风</label>
-    <label><input type="checkbox" name="geolocation"> 定位</label>
-    <label><input type="checkbox" name="notifications"> 通知</label>
-    <label><input type="checkbox" name="screen"> 屏幕共享</label>
-    <p class="muted">每次屏幕共享仍需确认。</p>
+    <label><input type="checkbox" name="camera"> <span data-i18n="permCamera">Camera</span></label>
+    <label><input type="checkbox" name="microphone"> <span data-i18n="permMicrophone">Microphone</span></label>
+    <label><input type="checkbox" name="geolocation"> <span data-i18n="permGeolocation">Location</span></label>
+    <label><input type="checkbox" name="notifications"> <span data-i18n="permNotifications">Notifications</span></label>
+    <label><input type="checkbox" name="screen"> <span data-i18n="permScreen">Screen Share</span></label>
+    <p class="muted" data-i18n="permScreenHint">Screen share always asks for confirmation.</p>
   </details>
-  <section><h2>标签任务</h2><div id="tab-tasks"></div></section>
-  <section><h2>已连接的 Agent</h2><div id="clients" class="muted">等待 MCP 客户端连接</div></section>
-  <section class="activity"><h2>操作记录</h2><div id="receipts" class="muted">操作完成后，回执会显示在这里。</div></section>
-  <section><h2>连接方式</h2><p class="muted">支持 MCP 标准接口。连接方法见项目 README。</p><p id="status" class="badge">本地运行</p></section>
+  <section><h2 data-i18n="tabTasksHeading">Tab Tasks</h2><div id="tab-tasks"></div></section>
+  <section><h2 data-i18n="clientsHeading">Connected Agents</h2><div id="clients" class="muted" data-i18n="clientsEmpty">Waiting for MCP clients</div></section>
+  <section class="activity"><h2 data-i18n="receiptsHeading">Action Receipts</h2><div id="receipts" class="muted" data-i18n="receiptsEmpty">Completed action receipts will appear here.</div></section>
+  <section><h2 data-i18n="connectionHeading">MCP Connection</h2><p class="muted" data-i18n="connectionHint">Supports MCP stdio &amp; local Streamable HTTP. Run setup or check README to connect.</p><p id="status" class="badge">Local</p></section>
 </aside>
-<div id="empty"><h2>开始浏览</h2><p>在地址栏输入网址，或新建一个标签页。</p></div>
+<div id="empty"><h2 data-i18n="emptyHeading">Start Browsing</h2><p data-i18n="emptyHint">Enter a URL above or open a new tab.</p></div>
 <div id="error" role="status" hidden></div>
-<script src="app.js"></script></body></html>
+<script src="i18n-ui.js"></script><script src="product-discovery.js"></script><script src="app.js"></script></body></html>

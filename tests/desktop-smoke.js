@@ -61,10 +61,11 @@ test('Desktop MCP reads two background tabs and preserves the active tab', { tim
     assert.notEqual(ids[0], ids[1]);
     const batch = await call('browser_collect_batch', { tab_ids: ids });
     assert.deepEqual(batch.results.map(result => result.tab_id), ids);
-    for (const result of batch.results) assert.match(JSON.stringify(result), /浏览器连接验证/);
+    for (const result of batch.results) assert.match(JSON.stringify(result), /Browser Connection Check|浏览器连接验证/);
     assert.equal((await call('browser_tabs')).active, initial.active);
     const status = await call('browser_status');
-    assert.equal(status.app, 'VA电商浏览器 AI版');
+    assert.match(status.app, /VA Commerce Browser|VA电商浏览器 AI版/);
+    assert.equal(status.mode, 'oss');
   } finally {
     await client.close();
     if (browser.exitCode === null && browser.signalCode === null) {

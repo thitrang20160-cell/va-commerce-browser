@@ -1,0 +1,203 @@
+(function () {
+  const STRINGS = {
+    'zh-CN': {
+      brandName: 'VA电商浏览器 AI版',
+      brandOss: 'VA Commerce Browser',
+      newTabTitle: '新建标签页',
+      backTitle: '后退',
+      forwardTitle: '前进',
+      reloadTitle: '刷新',
+      addressLabel: '网页地址',
+      addressPlaceholder: '输入网址，开始一个任务',
+      discoveryToggle: 'AI 选品',
+      batchToggle: '批量采集',
+      batchToggleRunning: '批量采集中',
+      batchTogglePaused: '批量采集已暂停',
+      langSwitch: 'EN',
+      langSwitchTitle: 'Switch to English',
+      workspaceEyebrow: 'AGENT WORKSPACE',
+      workspaceHeading: '浏览器已就绪',
+      ownershipPaused: '已暂停。现在可以人工操作页面。',
+      ownershipActive: owner => owner + ' 正在操作这个标签页',
+      ownershipIdle: '当前标签页由你控制，等待 Agent 接管。',
+      takeover: '暂停 / 人工接管',
+      resume: '恢复 Agent 操作',
+      clipboardAllowOnce: '允许本页复制（60 秒）',
+      clipboardRevokeOnce: '撤销本页复制权限',
+      clipboardAllowSite: '始终允许此网站复制',
+      clipboardRevokeSite: '撤销此网站复制权限',
+      sitePermSummary: '网站权限',
+      permCamera: '摄像头',
+      permMicrophone: '麦克风',
+      permGeolocation: '定位',
+      permNotifications: '通知',
+      permScreen: '屏幕共享',
+      permScreenHint: '每次屏幕共享仍需确认。',
+      tabTasksHeading: '标签任务',
+      tabForeground: '前台',
+      tabBackground: '后台',
+      tabLoading: '加载中',
+      tabCollecting: '采集中',
+      tabWatchVideo: '视频监控',
+      tabWatchPage: '网页监控',
+      clientsHeading: '已连接的 Agent',
+      clientsEmpty: '等待 MCP 客户端连接',
+      receiptsHeading: '操作记录',
+      receiptsEmpty: '操作完成后，回执会显示在这里。',
+      connectionHeading: '连接方式',
+      connectionHintInternal: '支持 MCP 标准接口。首次使用请打开安装目录中的 clients，选择你的客户端配置。',
+      connectionHintOss: '支持标准 MCP stdio 与本地 Streamable HTTP，连接命令见项目 README。',
+      statusLocal: version => '本地运行 · ' + version,
+      emptyHeading: '开始浏览',
+      emptyHint: '在地址栏输入网址，或新建一个标签页。',
+      closeTabTitle: '关闭标签页',
+      discoveryHeading: 'AI 选品',
+      discoveryIntentLabel: '你想找什么商品？',
+      discoveryIntentPlaceholder: '例如：家居收纳，售价 $20–50，平台仓',
+      discoveryKeywordLabel: 'Amazon 搜索词（可选）',
+      discoveryStrategyLabel: '排名策略',
+      discoveryStrategyAuto: '按需求匹配',
+      discoveryStrategyBalanced: '稳健起量',
+      discoveryStrategyProfit: '利润优先',
+      discoveryStrategyTrend: '趋势试水',
+      discoveryFulfillmentLabel: '履约方式',
+      discoveryFulfillmentAuto: '按需求匹配',
+      discoveryFulfillmentFba: 'FBA 平台仓',
+      discoveryFulfillmentFbm: '自发货',
+      discoveryFulfillmentEither: '不限',
+      discoveryFiltersSummary: '筛选与成本',
+      discoveryIpOnly: '只选知识产权已核对的候选',
+      discoveryEvidenceLabel: '补充数据 JSON（可选）',
+      discoveryEvidencePlaceholder: '每项包含 ASIN、来源及日期',
+      discoverySearch: '开始找商品',
+      discoveryCurrent: '分析当前 Amazon 页面',
+      discoverySelectEligible: '勾选符合条件的商品',
+      discoveryExportCsv: '导出 CSV',
+      discoveryExportJson: '导出 JSON',
+      discoveryConfirm: n => (n ? '确认并采集 ' + n + ' 件' : '确认并开始采集'),
+      discoveryOpenProduct: '打开商品',
+      discoveryExported: path => '已导出报告：' + path,
+    },
+    en: {
+      brandName: 'VaMoon AI Browser',
+      brandOss: 'VA Commerce Browser',
+      newTabTitle: 'New Tab',
+      backTitle: 'Back',
+      forwardTitle: 'Forward',
+      reloadTitle: 'Reload',
+      addressLabel: 'URL',
+      addressPlaceholder: 'Enter a URL to start a task',
+      discoveryToggle: 'AI Discovery',
+      batchToggle: 'Batch Collect',
+      batchToggleRunning: 'Collecting…',
+      batchTogglePaused: 'Batch Paused',
+      langSwitch: '中文',
+      langSwitchTitle: '切换到简体中文',
+      workspaceEyebrow: 'AGENT WORKSPACE',
+      workspaceHeading: 'Browser Ready',
+      ownershipPaused: 'Paused. You have full manual control.',
+      ownershipActive: owner => owner + ' is controlling this tab',
+      ownershipIdle: 'You control this tab. Ready for an agent to claim.',
+      takeover: 'Pause / Take Over',
+      resume: 'Resume Agent Control',
+      clipboardAllowOnce: 'Allow page copy (60s)',
+      clipboardRevokeOnce: 'Revoke page copy',
+      clipboardAllowSite: 'Always allow site copy',
+      clipboardRevokeSite: 'Revoke site copy',
+      sitePermSummary: 'Site Permissions',
+      permCamera: 'Camera',
+      permMicrophone: 'Microphone',
+      permGeolocation: 'Location',
+      permNotifications: 'Notifications',
+      permScreen: 'Screen Share',
+      permScreenHint: 'Screen share always asks for confirmation.',
+      tabTasksHeading: 'Tab Tasks',
+      tabForeground: 'Front',
+      tabBackground: 'Background',
+      tabLoading: 'Loading',
+      tabCollecting: 'Collecting',
+      tabWatchVideo: 'Video watch',
+      tabWatchPage: 'Page watch',
+      clientsHeading: 'Connected Agents',
+      clientsEmpty: 'Waiting for MCP clients',
+      receiptsHeading: 'Action Receipts',
+      receiptsEmpty: 'Completed action receipts will appear here.',
+      connectionHeading: 'MCP Connection',
+      connectionHintInternal: 'Supports standard MCP stdio & local HTTP. See the clients/ folder for presets.',
+      connectionHintOss: 'Supports MCP stdio & local Streamable HTTP. Run setup or check README to connect.',
+      statusLocal: version => 'Local · ' + version,
+      emptyHeading: 'Start Browsing',
+      emptyHint: 'Enter a URL above or open a new tab.',
+      closeTabTitle: 'Close Tab',
+      discoveryHeading: 'AI Product Discovery',
+      discoveryIntentLabel: 'What product are you looking for?',
+      discoveryIntentPlaceholder: 'e.g. silicone under sink mat, $15-35, FBA',
+      discoveryKeywordLabel: 'Amazon Search Keyword (optional)',
+      discoveryStrategyLabel: 'Strategy',
+      discoveryStrategyAuto: 'Auto from intent',
+      discoveryStrategyBalanced: 'Balanced',
+      discoveryStrategyProfit: 'Profit first',
+      discoveryStrategyTrend: 'Trend first',
+      discoveryFulfillmentLabel: 'Fulfillment',
+      discoveryFulfillmentAuto: 'Auto from intent',
+      discoveryFulfillmentFba: 'FBA',
+      discoveryFulfillmentFbm: 'FBM',
+      discoveryFulfillmentEither: 'Any',
+      discoveryFiltersSummary: 'Filters & Unit Economics',
+      discoveryIpOnly: 'Only IP-reviewed candidates',
+      discoveryEvidenceLabel: 'Attributed Evidence JSON (optional)',
+      discoveryEvidencePlaceholder: 'Array with asin, source, as_of, metrics',
+      discoverySearch: 'Find Products',
+      discoveryCurrent: 'Analyze Current Amazon Tab',
+      discoverySelectEligible: 'Select Eligible',
+      discoveryExportCsv: 'Export CSV',
+      discoveryExportJson: 'Export JSON',
+      discoveryConfirm: n => (n ? 'Collect ' + n + ' Selected' : 'Confirm & Collect'),
+      discoveryOpenProduct: 'Open Product',
+      discoveryExported: path => 'Exported report: ' + path,
+    },
+  };
+
+  let currentLocale = 'zh-CN';
+
+  function setLocale(locale) {
+    currentLocale = STRINGS[locale] ? locale : 'en';
+    document.documentElement.lang = currentLocale;
+  }
+
+  function t(key, ...args) {
+    const dict = STRINGS[currentLocale] || STRINGS.en;
+    const val = dict[key] ?? STRINGS.en[key] ?? key;
+    return typeof val === 'function' ? val(...args) : val;
+  }
+
+  function applyStatic(mode) {
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+      const key = el.getAttribute('data-i18n');
+      if (key === 'brandName' && mode === 'oss') el.textContent = t('brandOss');
+      else if (key === 'connectionHint') el.textContent = t(mode === 'oss' ? 'connectionHintOss' : 'connectionHintInternal');
+      else el.textContent = t(key);
+    });
+    document.querySelectorAll('[data-i18n-title]').forEach(el => {
+      el.title = t(el.getAttribute('data-i18n-title'));
+    });
+    document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+      el.placeholder = t(el.getAttribute('data-i18n-placeholder'));
+    });
+    document.querySelectorAll('[data-i18n-aria]').forEach(el => {
+      el.setAttribute('aria-label', t(el.getAttribute('data-i18n-aria')));
+    });
+    const langBtn = document.getElementById('lang-toggle');
+    if (langBtn) {
+      langBtn.textContent = t('langSwitch');
+      langBtn.title = t('langSwitchTitle');
+    }
+  }
+
+  window.browserI18n = {
+    setLocale,
+    getLocale: () => currentLocale,
+    t,
+    applyStatic,
+  };
+})();

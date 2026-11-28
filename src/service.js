@@ -2,7 +2,7 @@ import http from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { createMcp, definitions } from './tools.js';
+import { createMcp } from './tools.js';
 import packageInfo from '../package.json' with { type: 'json' };
 
 export const DEMO = `<!doctype html><html lang="zh-CN"><meta charset="utf-8">
@@ -31,6 +31,7 @@ function matches(actual, expected) {
   const b = Buffer.from(expected);
   return a.length === b.length && timingSafeEqual(a, b);
 }
+
 async function jsonBody(req) {
   const pieces = [];
   let size = 0;
@@ -43,7 +44,8 @@ async function jsonBody(req) {
 }
 
 export async function startService(engine, token, port = 18773) {
-  const schemas = new Map(definitions.map(([name, , schema]) => [name, z.object(schema).strict()]));
+  const activeDefinitions = engine.toolDefinitions();
+  const schemas = new Map(activeDefinitions.map(([name, , schema]) => [name, z.object(schema).strict()]));
   const server = http.createServer(async (req, res) => {
     const send = (status, value) => {
       res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
@@ -52,8 +54,15 @@ export async function startService(engine, token, port = 18773) {
     try {
       const host = req.headers.host || '';
       if (!/^(127\.0\.0\.1|localhost):\d+$/.test(host) || req.headers.origin) return send(403, { error: 'INVALID_ORIGIN' });
-      if (req.url === '/health' && req.method === 'GET') return send(200, { app: 'vamoon-browser', version: packageInfo.version,
-        product_discovery: true });
+      if (req.url === '/health' && req.method === 'GET') {
+        return send(200, {
+          app: 'vamoon-browser',
+          version: packageInfo.version,
+          mode: engine.mode,
+          plugins: engine.plugins.ids(),
+          ...engine.plugins.healthFlags(),
+        });
+      }
       if (req.url === '/demo' && req.method === 'GET') {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Content-Security-Policy': "default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'" });
         return res.end(DEMO);
@@ -68,7 +77,7 @@ export async function startService(engine, token, port = 18773) {
         if (req.method !== 'POST') return send(405, { error: 'POST_REQUIRED' });
         const body = await jsonBody(req);
         const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
-        const mcp = createMcp(client, (name, args, who) => engine.execute(name, args, who));
+        const mcp = createMcp(client, (name, args, who) => engine.execute(name, args, who), activeDefinitions);
         res.on('close', () => { transport.close().catch(() => {}); mcp.close().catch(() => {}); });
         await mcp.connect(transport);
         return await transport.handleRequest(req, res, body);

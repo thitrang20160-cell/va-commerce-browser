@@ -1,0 +1,13 @@
+[
+  { "pattern": "厨房收纳", "keyword": "kitchen storage organization" },
+  { "pattern": "园艺|庭院", "keyword": "garden supplies" },
+  { "pattern": "办公用品|办公收纳", "keyword": "office desk organizers" },
+  { "pattern": "浴室", "keyword": "bathroom storage" },
+  { "pattern": "车载|汽车配件", "keyword": "car accessories" },
+  { "pattern": "家居收纳|收纳", "keyword": "home storage organization" },
+  { "pattern": "宠物用品|宠物", "keyword": "pet supplies" },
+  { "pattern": "露营|户外", "keyword": "camping outdoor gear" },
+  { "pattern": "健身|瑜伽", "keyword": "home gym fitness accessories" },
+  { "pattern": "母婴|婴儿", "keyword": "baby essentials organizer" },
+  { "pattern": "美妆收纳|化妆收纳", "keyword": "makeup vanity organizer" }
+]

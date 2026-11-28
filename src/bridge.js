@@ -1,10 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { createMcp } from './tools.js';
+import { createMcp, definitionsForMode } from './tools.js';
+import { resolveDataDir } from './paths.js';
+import { resolveMode } from './plugins/index.js';
 import packageInfo from '../package.json' with { type: 'json' };
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -12,11 +13,9 @@ const flag = (name) => {
   const index = process.argv.indexOf(name);
   return index < 0 ? undefined : process.argv[index + 1];
 };
+const mode = resolveMode(flag('--mode'));
 const clientName = flag('--client') || 'generic-agent';
-const home = os.homedir();
-const appData = process.platform === 'win32' ? process.env.APPDATA || path.join(home, 'AppData', 'Roaming') :
-  process.platform === 'darwin' ? path.join(home, 'Library', 'Application Support') : process.env.XDG_CONFIG_HOME || path.join(home, '.config');
-const profile = flag('--data-dir') || path.join(appData, 'VA Commerce Browser OSS');
+const profile = resolveDataDir({ explicitDir: flag('--data-dir'), mode });
 const runtimePath = path.join(profile, 'runtime.json');
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 let launched = false;
@@ -29,23 +28,27 @@ async function connection() {
       if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1' || !data.token) throw new Error('Invalid local endpoint');
       const health = await fetch(data.endpoint + '/health', { signal: AbortSignal.timeout(1000) });
       const status = await health.json();
-      if (status.app === 'vamoon-browser') return { ...data, version: status.version, productDiscovery: status.product_discovery === true };
+      if (status.app === 'vamoon-browser') {
+        return { ...data, version: status.version, health: status };
+      }
     } catch {}
     if (!launched && !process.argv.includes('--no-autostart')) {
       launched = true;
-      const child = spawn(process.execPath, [path.join(root, 'scripts', 'start.js'), '--data-dir', profile], {
+      const startArgs = [path.join(root, 'scripts', 'start.js'), '--data-dir', profile, '--mode', mode];
+      const child = spawn(process.execPath, startArgs, {
         detached: true, stdio: 'ignore', windowsHide: true,
       });
       child.unref();
     }
     await delay(250);
   }
-  throw new Error(`浏览器尚未就绪。请打开 ${packageInfo.productName} 后重试。`);
+  throw new Error(`Browser is not ready. Open ${packageInfo.productName} and retry.`);
 }
 
 const server = createMcp(clientName, async (tool, args) => {
   const runtime = await connection();
-  if (tool === 'browser_product_discover' && !runtime.productDiscovery) {
+  const h = runtime.health || {};
+  if (tool === 'browser_product_discover' && h.product_discovery !== true) {
     throw Object.assign(new Error(`Restart ${packageInfo.productName} to load product discovery.`), { code: 'BROWSER_UPDATE_REQUIRED' });
   }
   const requiresCollectionUpdate = tool === 'browser_collect_batch' ||
@@ -66,5 +69,6 @@ const server = createMcp(clientName, async (tool, args) => {
   const value = await response.json();
   if (!response.ok) throw Object.assign(new Error(value.message || value.error), { code: value.error });
   return value.result;
-});
+}, definitionsForMode(mode));
+
 await server.connect(new StdioServerTransport());

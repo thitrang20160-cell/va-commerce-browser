@@ -1,14 +1,22 @@
 {
   "name": "va-commerce-browser",
-  "productName": "VA电商浏览器 AI版",
-  "version": "0.5.0",
-  "private": true,
-  "description": "Desktop browser with tab-scoped MCP tools for AI agents",
+  "productName": "VA Commerce Browser",
+  "version": "0.6.0",
+  "license": "MIT",
+  "description": "Open-source visible desktop browser with shared MCP access, tab leases, idempotent receipts, video reading, and pluggable site extractors",
   "type": "module",
   "main": "src/main.js",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "start": "node scripts/start.js",
-    "test": "node --test tests/*.js"
+    "setup:mcp": "node scripts/setup-mcp.mjs",
+    "test": "node --test tests/oss-core.js tests/product-discovery.js",
+    "test:desktop": "node --test tests/desktop-smoke.js",
+    "dist:win": "npx --yes electron-builder --win --publish never",
+    "dist:mac": "npx --yes electron-builder --mac --publish never",
+    "dist:linux": "npx --yes electron-builder --linux --publish never"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.2",
@@ -16,8 +24,35 @@
     "ws": "8.23.0",
     "zod": "4.6.7"
   },
-  "license": "MIT",
-  "engines": {
-    "node": ">=22"
+  "build": {
+    "appId": "com.vamoon.commerce-browser",
+    "productName": "VA Commerce Browser",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "scripts/**/*",
+      "package.json",
+      "LICENSE"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "zip"
+      ]
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.productivity"
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ]
+    }
   }
 }
