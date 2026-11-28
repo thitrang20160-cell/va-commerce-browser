@@ -1,7 +1,13 @@
 {
   "name": "va-commerce-browser",
   "productName": "VA Commerce Browser",
-  "version": "0.6.0",
+  "version": "0.6.1",
+  "author": "VaMoon Contributors",
+  "homepage": "https://github.com/thitrang20160-cell/va-commerce-browser",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/thitrang20160-cell/va-commerce-browser.git"
+  },
   "license": "MIT",
   "description": "Open-source visible desktop browser with shared MCP access, tab leases, idempotent receipts, video reading, and pluggable site extractors",
   "type": "module",
@@ -20,9 +26,11 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.2",
-    "electron": "45.4.1",
     "ws": "8.23.0",
     "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "electron": "45.4.1"
   },
   "build": {
     "appId": "com.vamoon.commerce-browser",
@@ -52,7 +60,8 @@
     "linux": {
       "target": [
         "AppImage"
-      ]
+      ],
+      "category": "Development"
     }
   }
 }
