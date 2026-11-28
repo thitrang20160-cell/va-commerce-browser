@@ -15,6 +15,7 @@ const command = async (name, args = {}) => {
 };
 
 const extensionUpdaters = (window.browserExtensions || []).map(bind => bind($, command));
+const updateMcpConnector = typeof bindMcpConnector === 'function' ? bindMcpConnector($, command) : () => {};
 const updateDiscovery = typeof bindProductDiscovery === 'function' ? bindProductDiscovery($, command) : () => {};
 
 function hasPanel(state, name) {
@@ -91,6 +92,7 @@ function update(state) {
   for (const input of permissionInputs) input.checked = Boolean(active?.site_permissions?.[input.name]);
 
   for (const updater of extensionUpdaters) updater(state, active);
+  updateMcpConnector(state);
   if (discoveryEnabled) updateDiscovery(state);
 
   $('status').textContent = t('statusLocal', state.version);

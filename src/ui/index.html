@@ -7,9 +7,39 @@
 <nav><button id="back" data-i18n-title="backTitle" title="Back">←</button><button id="forward" data-i18n-title="forwardTitle" title="Forward">→</button><button id="reload" data-i18n-title="reloadTitle" title="Reload">↻</button>
 <form id="address-form"><input id="address" data-i18n-aria="addressLabel" data-i18n-placeholder="addressPlaceholder" aria-label="URL" placeholder="Enter a URL to start a task" autocomplete="off"></form>
 <button id="zoom-out">−</button><span id="zoom">100%</span><button id="zoom-in">＋</button>
+<button id="mcp-toggle" class="batch-entry mcp-entry" type="button" aria-expanded="false" aria-controls="mcp-connector" data-i18n="mcpToggle">MCP Connect</button>
 <button id="discovery-toggle" class="batch-entry" type="button" aria-expanded="false" aria-controls="product-discovery" data-i18n="discoveryToggle">AI Discovery</button>
 <button id="lang-toggle" class="lang-btn" type="button" title="切换到简体中文">中文</button></nav>
 <aside>
+  <section id="mcp-connector" class="collection-panel" hidden>
+    <div class="mcp-head">
+      <h2 data-i18n="mcpHeading">MCP Connector</h2>
+      <button id="mcp-refresh" type="button" class="mcp-mini-btn" data-i18n="mcpRefresh">Refresh</button>
+    </div>
+    <p class="muted" data-i18n="mcpSubtitle">Register this browser into Claude Code, Cursor, Windsurf, Claude Desktop, or Cline in one click, or copy the Codex command.</p>
+    <div class="mcp-status-box">
+      <div class="mcp-status-line"><span class="mcp-k" data-i18n="mcpEndpointLabel">Local Endpoint</span><code id="mcp-endpoint">127.0.0.1</code></div>
+      <div class="mcp-status-line"><span class="mcp-k" data-i18n="mcpServerNameLabel">Server Name</span><code id="mcp-server-name">va_commerce_browser</code></div>
+    </div>
+    <div class="batch-label" data-i18n="mcpClientsLabel">One-Click Config Install (auto-backup)</div>
+    <div id="mcp-client-list" class="mcp-client-list"></div>
+    <div class="batch-label" data-i18n="mcpCodexLabel">Codex CLI</div>
+    <p id="mcp-codex-badge" class="muted"></p>
+    <textarea id="mcp-codex-cmd" class="mcp-code" rows="2" readonly></textarea>
+    <div class="batch-actions">
+      <button id="mcp-copy-codex" type="button" class="primary" data-i18n="mcpCopyCodex">Copy Codex Command</button>
+      <button id="mcp-open-demo" type="button" data-i18n="mcpOpenDemo">Open Local Demo</button>
+    </div>
+    <details class="discovery-filters mcp-details">
+      <summary data-i18n="mcpGenericSummary">Generic MCP JSON / HTTP URL</summary>
+      <textarea id="mcp-generic-json" class="mcp-code" rows="6" readonly></textarea>
+      <div class="batch-actions">
+        <button id="mcp-copy-json" type="button" data-i18n="mcpCopyJson">Copy JSON</button>
+        <button id="mcp-copy-endpoint" type="button" data-i18n="mcpCopyEndpoint">Copy /mcp URL</button>
+      </div>
+    </details>
+    <p class="muted batch-feedback" id="mcp-feedback" role="status"></p>
+  </section>
   <section id="product-discovery" class="collection-panel" hidden>
     <h2 data-i18n="discoveryHeading">AI Product Discovery</h2>
     <label for="discovery-intent" class="batch-label" data-i18n="discoveryIntentLabel">What product are you looking for?</label>
@@ -73,8 +103,8 @@
   <section><h2 data-i18n="tabTasksHeading">Tab Tasks</h2><div id="tab-tasks"></div></section>
   <section><h2 data-i18n="clientsHeading">Connected Agents</h2><div id="clients" class="muted" data-i18n="clientsEmpty">Waiting for MCP clients</div></section>
   <section class="activity"><h2 data-i18n="receiptsHeading">Action Receipts</h2><div id="receipts" class="muted" data-i18n="receiptsEmpty">Completed action receipts will appear here.</div></section>
-  <section><h2 data-i18n="connectionHeading">MCP Connection</h2><p class="muted" data-i18n="connectionHint">Supports MCP stdio &amp; local Streamable HTTP. Run setup or check README to connect.</p><p id="status" class="badge">Local</p></section>
+  <section><h2 data-i18n="connectionHeading">MCP Connection</h2><p class="muted" data-i18n="connectionHint">Supports MCP stdio &amp; local Streamable HTTP. Open MCP Connector for 1-click setup.</p><div class="batch-actions"><button id="mcp-open-from-card" type="button" data-i18n="mcpOpenButton">Open MCP Connector</button></div><p id="status" class="badge">Local</p></section>
 </aside>
 <div id="empty"><h2 data-i18n="emptyHeading">Start Browsing</h2><p data-i18n="emptyHint">Enter a URL above or open a new tab.</p></div>
 <div id="error" role="status" hidden></div>
-<script src="i18n-ui.js"></script><script src="product-discovery.js"></script><script src="app.js"></script></body></html>
+<script src="i18n-ui.js"></script><script src="mcp-connector.js"></script><script src="product-discovery.js"></script><script src="app.js"></script></body></html>

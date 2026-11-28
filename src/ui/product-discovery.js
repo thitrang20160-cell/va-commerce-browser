@@ -138,9 +138,11 @@ function bindProductDiscovery($, command) {
   $('discovery-toggle').onclick = () => {
     panel.hidden = !panel.hidden;
     $('discovery-toggle').setAttribute('aria-expanded', String(!panel.hidden));
-    if (!panel.hidden && $('sellerstar-batch')) {
-      $('sellerstar-batch').hidden = true;
+    if (!panel.hidden) {
+      if ($('sellerstar-batch')) $('sellerstar-batch').hidden = true;
       if ($('batch-toggle')) $('batch-toggle').setAttribute('aria-expanded', 'false');
+      if ($('mcp-connector')) $('mcp-connector').hidden = true;
+      if ($('mcp-toggle')) $('mcp-toggle').setAttribute('aria-expanded', 'false');
       panel.scrollIntoView({ block: 'start' });
     }
   };

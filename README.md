@@ -94,9 +94,14 @@ Switch **EN / 中文** live anytime from the top toolbar (auto-detects your OS l
 
 ---
 
-## 1-Command MCP Client Setup
+## 1-Click Visual MCP Connector (Built-in UI + CLI)
 
-Automatically wire VA Commerce Browser into your favorite AI coding agent (backs up your existing config before writing):
+Click **`MCP Connect`** right in the browser's top toolbar to:
+- View your active loopback endpoint (`127.0.0.1:<port>`) and loaded MCP tool count.
+- **One-click auto-install** (with automatic `.bak` backup) into **Claude Code**, **Cursor**, **Windsurf**, **Claude Desktop**, or **Cline** — works even from prebuilt `.exe`/`.dmg`/`.AppImage` packages without a separate Node.js install.
+- Copy the exact **Codex CLI** registration command or generic **MCP JSON** snippet in one click.
+
+Prefer the command line? Run the same engine via CLI:
 
 ```bash
 # Preview changes without modifying any file

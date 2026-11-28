@@ -23,6 +23,27 @@ section{margin-bottom:28px}h1{font-size:23px;font-weight:650;margin:10px 0}h2{fo
 button:disabled{cursor:default;opacity:.6}
 .batch-entry{white-space:nowrap;background:#e5f2ef;border-color:#9cbcb5;color:#164d47;font-weight:650}
 .batch-entry[aria-expanded="true"]{background:#185f68;color:white;border-color:#185f68}
+.mcp-entry{background:#e4f4f6;border-color:#7cb7c1;color:#104c56}
+.mcp-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px}
+.mcp-head h2{margin:0}
+.mcp-mini-btn{font-size:11px;padding:3px 8px}
+.mcp-status-box{background:#f3f8f9;border:1px solid #d4e3e6;border-radius:7px;padding:7px 9px;margin:8px 0}
+.mcp-status-line{display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:11px;line-height:1.6}
+.mcp-status-line code{font-family:Consolas,"JetBrains Mono",monospace;font-size:11px;color:#114e58;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mcp-k{color:#5a757e;flex-shrink:0}
+.mcp-client-list{display:flex;flex-direction:column;gap:5px;margin:5px 0 8px}
+.mcp-client-row{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:6px 8px;border:1px solid #dde7e9;border-radius:7px;background:#fafcfd}
+.mcp-client-meta{min-width:0}
+.mcp-client-meta strong{display:block;font-size:12px;color:#1e3a42}
+.mcp-client-meta small{display:block;font-size:11px;color:#6c8289}
+.mcp-ok{color:#157a65!important;font-weight:600}
+.mcp-btn-install{font-size:11px;padding:4px 8px;background:#185f68;border-color:#185f68;color:#fff;white-space:nowrap}
+.mcp-btn-install:hover{background:#104c54}
+.mcp-btn-reinstall{font-size:11px;padding:4px 8px;white-space:nowrap}
+.mcp-code{font-family:Consolas,"JetBrains Mono",monospace!important;font-size:11px!important;line-height:1.45;background:#f5f8f9!important;color:#143640!important}
+.mcp-details{margin-top:8px}
+.mcp-feedback-error{color:#9b2c2c!important}
+#mcp-open-from-card{margin-bottom:10px}
 .lang-btn{white-space:nowrap;font-size:12px;padding:6px 8px;color:#47646d}
 .collection-panel{background:white;border:1px solid #c6d8d9;border-radius:10px;padding:12px}
 .collection-panel h2{margin:0 0 6px}

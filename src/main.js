@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, session, shell } from 'electron';
+import { app, BrowserWindow, clipboard, ipcMain, session, shell } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
@@ -10,6 +10,7 @@ import { installSitePermissions } from './site-permissions.js';
 import { resolveDataDir, resolveDownloadDir } from './paths.js';
 import { resolveLocale, saveLocale } from './i18n.js';
 import { createPluginHost, loadOptionalExtensionModule, resolveMode } from './plugins/index.js';
+import { inspectMcpConnector, installMcpClient } from './mcp-connector.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 function argument(name) {
@@ -98,6 +99,35 @@ app.whenReady().then(async () => {
       engine.locale = saveLocale(dataDir, payload.locale);
       engine.emit();
       return engine.state();
+    }
+    if (command === 'mcp-connector-info') {
+      return inspectMcpConnector({
+        mode,
+        projectRoot: path.dirname(here),
+        endpoint: service ? 'http://127.0.0.1:' + service.port : null,
+        toolCount: engine.toolDefinitions().length,
+        dataDir,
+      });
+    }
+    if (command === 'mcp-connector-install') {
+      const clientId = String(payload?.client || '');
+      const result = installMcpClient({ client: clientId, mode, projectRoot: path.dirname(here) });
+      const info = inspectMcpConnector({
+        mode,
+        projectRoot: path.dirname(here),
+        endpoint: service ? 'http://127.0.0.1:' + service.port : null,
+        toolCount: engine.toolDefinitions().length,
+        dataDir,
+      });
+      return { ...result, info };
+    }
+    if (command === 'mcp-connector-copy') {
+      clipboard.writeText(String(payload?.text || ''));
+      return { copied: true };
+    }
+    if (command === 'mcp-connector-open-demo') {
+      if (!service) throw new Error('Local service not ready');
+      return engine.newTab('http://127.0.0.1:' + service.port + '/demo').then(t => engine.describe(t));
     }
     if (command === 'new') return engine.newTab(payload.url || 'about:blank').then(t => engine.describe(t));
 

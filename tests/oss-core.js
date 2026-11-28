@@ -9,6 +9,7 @@ import { definitionsForMode } from '../src/tools.js';
 import { normalizeLocale, saveLocale, loadSavedLocale } from '../src/i18n.js';
 import { exportDiscoveryReport } from '../src/product-discovery.js';
 import { buildServerSpec, installJsonClient } from '../scripts/setup-mcp.mjs';
+import { inspectMcpConnector, buildCodexCommand } from '../src/mcp-connector.js';
 
 const mkTmp = (prefix) => fs.mkdtempSync(path.join(os.tmpdir(), prefix));
 
@@ -54,4 +55,12 @@ test('i18n persistence, CSV export, and setup-mcp installer preserve existing cl
   const after = JSON.parse(fs.readFileSync(cfgFile, 'utf8'));
   assert.deepEqual(after.mcpServers.existing_tool, { command: 'echo', args: ['hi'] });
   assert.deepEqual(after.mcpServers.va_commerce_browser, spec);
+
+  const info = inspectMcpConnector({ mode: 'oss', projectRoot: dir, endpoint: 'http://127.0.0.1:18773', toolCount: 29 });
+  assert.equal(info.server_name, 'va_commerce_browser');
+  assert.equal(info.mcp_http_url, 'http://127.0.0.1:18773/mcp');
+  assert.equal(info.tool_count, 29);
+  assert.ok(info.clients.some(c => c.id === 'claude-code' && c.format === 'json'));
+  assert.ok(info.clients.some(c => c.id === 'codex' && c.format === 'toml-hint'));
+  assert.match(buildCodexCommand({ mode: 'oss', projectRoot: dir }), /^codex mcp add va_commerce_browser /);
 });
