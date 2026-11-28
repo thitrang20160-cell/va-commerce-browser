@@ -16,4 +16,9 @@ contextBridge.exposeInMainWorld('browserUI', {
     ipcRenderer.on('browser-shortcut', listener);
     return () => ipcRenderer.removeListener('browser-shortcut', listener);
   },
+  subscribeDepProgress: (callback) => {
+    const listener = (_event, progress) => callback(progress);
+    ipcRenderer.on('dep-progress', listener);
+    return () => ipcRenderer.removeListener('dep-progress', listener);
+  },
 });

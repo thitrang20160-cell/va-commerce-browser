@@ -914,3 +914,85 @@ html[data-theme="light"] .bt-pill.active { background: #ede9fe; border-color: #8
 .cad-check-item.is-ok { color: var(--green); background: var(--green-soft); }
 .cad-check-item.is-warn { color: var(--amber); background: var(--amber-soft); }
 .cad-action-row { display: flex; flex-wrap: wrap; gap: 4px; padding-top: 2px; }
+.cad-engine-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 5px;
+  align-items: center;
+}
+.cad-engine-row select {
+  width: 100%;
+  height: 28px;
+  padding: 0 7px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  background: var(--input-bg);
+  color: var(--ink);
+  font-size: 11px;
+}
+.dep-consent-box {
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  background: rgba(245, 158, 11, 0.08);
+  border-radius: 9px;
+  padding: 9px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.dep-consent-box[hidden] { display: none; }
+.dep-consent-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--ink);
+}
+.dep-consent-head .hub-badge {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.dep-consent-desc {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+.dep-consent-path {
+  font-family: "JetBrains Mono", Consolas, monospace;
+  font-size: 10px;
+  color: var(--ink-3);
+  word-break: break-all;
+}
+.dep-progress-wrap { display: flex; flex-direction: column; gap: 4px; }
+.dep-progress-wrap[hidden] { display: none; }
+.dep-progress-track {
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.22);
+  overflow: hidden;
+}
+.dep-progress-bar {
+  width: 0%;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #14b8a6, #2dd4bf);
+  transition: width 0.2s ease;
+}
+.dep-progress-msg {
+  font-size: 10.5px;
+  color: var(--accent);
+  line-height: 1.35;
+  word-break: break-word;
+}
+.dep-consent-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  align-items: center;
+}
+.bt-consent-btn {
+  padding: 5px 10px !important;
+  font-size: 11px !important;
+}

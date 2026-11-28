@@ -1,16 +1,20 @@
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
+import { resolveFfmpegBinary } from './dep-manager.js';
 
 export async function transcribeVideoAudio(dataDir, audio, data, language) {
   const modelDir = path.join(dataDir, 'media-models');
   const modelName = 'ggml-base-q5_1.bin';
-  if (!existsSync(path.join(modelDir, modelName))) return { status: 'local_model_unavailable' };
+  if (!existsSync(path.join(modelDir, modelName))) {
+    return { status: 'local_model_unavailable', installable_dependency: 'whisper_model' };
+  }
   if (audio.timing !== 'continuous') return { status: 'audio_timing_unavailable' };
 
+  const ffmpegBin = resolveFfmpegBinary(dataDir);
   const result = await new Promise(resolve => {
     const filter = `whisper=model=${modelName}:language=${language}:queue=8:use_gpu=false:format=json:destination='pipe\\:1'`;
-    const child = spawn('ffmpeg', ['-hide_banner', '-nostdin', '-v', 'error', '-f', 'matroska', '-i', 'pipe:0',
+    const child = spawn(ffmpegBin, ['-hide_banner', '-nostdin', '-v', 'error', '-f', 'matroska', '-i', 'pipe:0',
       '-af', filter, '-f', 'null', '-'], { cwd: modelDir, windowsHide: true, stdio: ['pipe', 'pipe', 'ignore'] });
     let output = '';
     let stopped;
@@ -26,7 +30,7 @@ export async function transcribeVideoAudio(dataDir, audio, data, language) {
     });
     child.once('close', code => {
       clearTimeout(timer);
-      resolve(stopped ? { status: stopped } : code === 0 ? { output } : { status: 'transcription_failed' });
+      resolve(stopped ? { status: stopped, ...(stopped === 'local_decoder_unavailable' ? { installable_dependency: 'ffmpeg' } : {}) } : code === 0 ? { output } : { status: 'transcription_failed' });
     });
     child.stdin.end(Buffer.from(data, 'base64'));
   });

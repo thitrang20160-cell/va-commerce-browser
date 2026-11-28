@@ -13,7 +13,8 @@ import { createPluginHost, loadOptionalExtensionModule, resolveMode } from './pl
 import { inspectMcpConnector, installMcpClient, uninstallMcpClient } from './mcp-connector.js';
 import { build1688SearchUrl, enrichDistributionItems, runBoutiqueTeardown } from './sop-engine.js';
 import { build1688AgentPrompt, run1688McpSearch, runCadDraftMcp, runSafeSellMcpAudit, runSellerLensMcpAnalyze, testHubMcp } from './product-hub.js';
-import { generateModelDraft, inferDraftSpec } from './cad-draft-engine.js';
+import { applyCadQueryCompileResult, generateModelDraft, inferDraftSpec } from './cad-draft-engine.js';
+import { DependencyManager } from './dep-manager.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.dirname(here);
@@ -49,7 +50,13 @@ let lastDiscoveryFocusAsin = null;
 let engine;
 let service;
 let relay;
+const depManager = new DependencyManager(dataDir);
 const runtimePath = path.join(dataDir, 'runtime.json');
+
+function broadcastDepProgress(progress) {
+  if (window && !window.isDestroyed()) window.webContents.send('dep-progress', progress);
+  if (mcpModal && !mcpModal.isDestroyed()) mcpModal.webContents.send('dep-progress', progress);
+}
 
 function saveTabs() {
   if (!engine) return;
@@ -77,7 +84,9 @@ function buildConnectorInfo() {
 function openMcpModal(initialTab = null) {
   if (!window || window.isDestroyed()) return { open: false };
   if (mcpModal && !mcpModal.isDestroyed()) {
-    if (initialTab === 'hub') void mcpModal.loadFile(path.join(here, 'ui', 'mcp-modal.html'), { query: { tab: 'hub' } });
+    if (initialTab === 'hub' || initialTab === 'deps') {
+      void mcpModal.loadFile(path.join(here, 'ui', 'mcp-modal.html'), { query: { tab: initialTab } });
+    }
     mcpModal.show();
     mcpModal.focus();
     return { open: true };
@@ -261,6 +270,12 @@ app.whenReady().then(async () => {
     'hub-save',
     'hub-test',
     'sop-open-sellerstar',
+    'dep-list',
+    'dep-check',
+    'dep-install',
+    'dep-cancel',
+    'dep-uninstall',
+    'dep-open-dir',
   ]);
 
   const DISCOVERY_MODAL_COMMANDS = new Set([
@@ -561,6 +576,25 @@ app.whenReady().then(async () => {
       return { mode: 'agent_prompt_fallback', copied: true, prompt, message: '已复制 1688 Skill / Agent 寻源指令到剪贴板。' };
     }
 
+    // ===== Self-Installing Local Dependency Manager (Consent-First) =====
+    if (command === 'dep-list') return depManager.listAll();
+    if (command === 'dep-check') return depManager.check(String(payload?.id || ''));
+    if (command === 'dep-install') {
+      const id = String(payload?.id || '');
+      return depManager.install(id, {
+        approved: payload?.approved === true,
+        reason: payload?.reason || 'user_ui_confirmed',
+        onProgress: progress => broadcastDepProgress(progress),
+      });
+    }
+    if (command === 'dep-cancel') return depManager.cancel(String(payload?.id || ''));
+    if (command === 'dep-uninstall') return depManager.uninstall(String(payload?.id || ''));
+    if (command === 'dep-open-dir') {
+      fs.mkdirSync(depManager.runtimesDir, { recursive: true });
+      await shell.openPath(depManager.runtimesDir);
+      return { opened: true, dir: depManager.runtimesDir };
+    }
+
     // ===== Parametric CAD Model Draft (STEP / STL / DXF / DFM / RFQ) =====
     if (command === 'sop-cad-infer') {
       const targetAsin = String(payload?.asin || '').trim().toUpperCase();
@@ -570,6 +604,7 @@ app.whenReady().then(async () => {
     if (command === 'sop-cad-generate') {
       const targetAsin = String(payload?.asin || '').trim().toUpperCase();
       const item = engine.sop.state.boutique.items.find(i => i.asin === targetAsin);
+      const requestedEngine = String(payload?.engine || 'auto'); // 'auto' | 'builtin' | 'cadquery'
       const baseSpec = item ? inferDraftSpec(item) : {};
       const mergedSpec = {
         ...baseSpec,
@@ -578,19 +613,43 @@ app.whenReady().then(async () => {
         title: item?.title || payload?.spec?.title || baseSpec.title || '',
         diff_note: item?.diff_note || payload?.spec?.diff_note || baseSpec.diff_note || '',
       };
+
+      // If customer explicitly requested CadQuery OCCT precision kernel and it is missing,
+      // return structured missing_dependency so UI asks customer consent before installing & auto-resuming.
+      let cadDep = null;
+      if (!engine.productHub.isConfigured('cad_draft') && requestedEngine !== 'builtin') {
+        cadDep = await depManager.check('cadquery');
+        if (requestedEngine === 'cadquery' && !cadDep.installed) {
+          return {
+            ok: false,
+            missing_dependency: cadDep,
+            pending_action: { command: 'sop-cad-generate', payload: { ...payload, engine: 'cadquery' } },
+          };
+        }
+      }
+
       const outDir = path.join(downloadDir || dataDir, 'VA-Model-Drafts');
       let draft;
       if (engine.productHub.isConfigured('cad_draft')) {
         draft = await runCadDraftMcp(engine.productHub.getRaw('cad_draft'), mergedSpec);
       } else {
         draft = generateModelDraft(mergedSpec, outDir);
+        if (cadDep?.installed && (requestedEngine === 'cadquery' || requestedEngine === 'auto')) {
+          try {
+            const occt = await depManager.compileCadQueryDraft(draft.files.cadquery_py, draft.files.dir);
+            draft = applyCadQueryCompileResult(draft, occt);
+          } catch (occtErr) {
+            if (requestedEngine === 'cadquery') throw occtErr;
+            draft.occt_warning = occtErr?.message || String(occtErr);
+          }
+        }
       }
       if (item) {
         const sop = engine.sop.updateBoutiqueItem(targetAsin, { model_draft: draft });
         engine.emit();
-        return { draft, sop };
+        return { ok: true, draft, sop };
       }
-      return { draft };
+      return { ok: true, draft };
     }
     if (command === 'sop-cad-apply-weight') {
       const targetAsin = String(payload?.asin || '').trim().toUpperCase();

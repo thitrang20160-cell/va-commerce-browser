@@ -43,7 +43,8 @@
         <button id="tab-all" class="tab-pill active" type="button" role="tab" aria-selected="true">全部客户端 <span id="count-all" class="tab-count">6</span></button>
         <button id="tab-connected" class="tab-pill" type="button" role="tab" aria-selected="false">已配置 <span id="count-connected" class="tab-count">0</span></button>
         <button id="tab-hub" class="tab-pill" type="button" role="tab" aria-selected="false">🔗 产品 MCP 中介 <span id="count-hub" class="tab-count">0</span></button>
-        <button id="tab-manual" class="tab-pill" type="button" role="tab" aria-selected="false">自定义 / 手动配置</button>
+        <button id="tab-deps" class="tab-pill" type="button" role="tab" aria-selected="false">📦 运行环境 <span id="count-deps" class="tab-count">0/4</span></button>
+        <button id="tab-manual" class="tab-pill" type="button" role="tab" aria-selected="false">手动配置</button>
       </div>
       <div id="search-wrap" class="search-box">
         <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -66,6 +67,17 @@
           <button id="btn-hub-open-portal" class="btn-outline-sm" type="button" hidden>打开塞星登录 ↗</button>
         </div>
         <div id="hub-services-list" class="hub-list"></div>
+      </div>
+
+      <div id="view-deps" class="hub-view" hidden>
+        <div class="hub-banner">
+          <div>
+            <strong id="deps-banner-title">按需自装运行环境（客户授权制 · 隔离沙箱）</strong>
+            <p id="deps-banner-desc" class="muted">缺什么依赖可在此一键自装，均安装至浏览器隔离目录（不污染系统环境）；首次安装需你的明确同意，安装后自动可用并支持随时清理。</p>
+          </div>
+          <button id="btn-deps-open-dir" class="btn-outline-sm" type="button">📂 打开隔离目录</button>
+        </div>
+        <div id="deps-list" class="hub-list"></div>
       </div>
 
       <div id="view-manual" class="manual-view" hidden>

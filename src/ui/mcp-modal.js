@@ -10,7 +10,8 @@
       tabAll: '全部客户端',
       tabConnected: '已配置',
       tabHub: '🔗 产品 MCP 中介',
-      tabManual: '自定义 / 手动配置',
+      tabDeps: '📦 运行环境',
+      tabManual: '手动配置',
       searchPlaceholder: '搜索客户端…',
       toolsUnit: '个工具',
       statusActive: '运行中',
@@ -59,7 +60,8 @@
       tabAll: 'All Clients',
       tabConnected: 'Connected',
       tabHub: '🔗 Product MCP Hub',
-      tabManual: 'Custom / JSON',
+      tabDeps: '📦 Runtimes',
+      tabManual: 'Manual / JSON',
       searchPlaceholder: 'Search connectors…',
       toolsUnit: 'tools',
       statusActive: 'Active',
@@ -114,10 +116,25 @@
   let locale = 'zh-CN';
   let info = null;
   let hubInfo = null;
-  let activeTab = new URLSearchParams(location.search).get('tab') === 'hub' ? 'hub' : 'all';
+  let depsInfo = null;
+  let confirmingDepId = null;
+  const depLiveProgress = {};
+  const initTabParam = new URLSearchParams(location.search).get('tab');
+  let activeTab = initTabParam === 'hub' ? 'hub' : initTabParam === 'deps' ? 'deps' : 'all';
   let query = '';
   let busy = false;
   let customFooter = false;
+
+  if (window.browserUI && typeof window.browserUI.subscribeDepProgress === 'function') {
+    window.browserUI.subscribeDepProgress(prog => {
+      if (!prog?.id) return;
+      depLiveProgress[prog.id] = prog;
+      if (activeTab === 'deps') renderDeps();
+      if (prog.status === 'installed' || prog.status === 'error' || prog.status === 'cancelled') {
+        void refresh();
+      }
+    });
+  }
 
   const t = (key, ...args) => {
     const dict = I18N[locale] || I18N.en;
@@ -142,6 +159,7 @@
     $('tab-all').childNodes[0].nodeValue = t('tabAll') + ' ';
     $('tab-connected').childNodes[0].nodeValue = t('tabConnected') + ' ';
     if ($('tab-hub')) $('tab-hub').childNodes[0].nodeValue = t('tabHub') + ' ';
+    if ($('tab-deps')) $('tab-deps').childNodes[0].nodeValue = t('tabDeps') + ' ';
     $('tab-manual').textContent = t('tabManual');
     $('search-input').placeholder = t('searchPlaceholder');
     $('manual-codex-title').textContent = t('manualCodexTitle');
@@ -283,19 +301,28 @@
 
     const isManual = activeTab === 'manual';
     const isHub = activeTab === 'hub';
-    $('search-wrap').hidden = isManual || isHub;
+    const isDeps = activeTab === 'deps';
+    $('search-wrap').hidden = isManual || isHub || isDeps;
     $('view-manual').hidden = !isManual;
     $('view-hub').hidden = !isHub;
-    $('view-grid').hidden = isManual || isHub;
+    if ($('view-deps')) $('view-deps').hidden = !isDeps;
+    $('view-grid').hidden = isManual || isHub || isDeps;
     $('view-empty').hidden = true;
 
     if (hubInfo) {
       const readyCount = (hubInfo.services || []).filter(s => s.ready).length;
       if ($('count-hub')) $('count-hub').textContent = String(readyCount);
     }
+    if (depsInfo && $('count-deps')) {
+      const items = depsInfo.items || [];
+      const okCount = items.filter(d => d.installed).length;
+      $('count-deps').textContent = `${okCount}/${items.length}`;
+    }
 
     if (isHub) {
       renderHub();
+    } else if (isDeps) {
+      renderDeps();
     } else if (!isManual) {
       const q = query.trim().toLowerCase();
       const filtered = clients.filter(c => {
@@ -439,9 +466,189 @@
     }));
   }
 
+  function renderDeps() {
+    const list = $('deps-list');
+    if (!list) return;
+    const isEn = locale === 'en';
+    if ($('deps-banner-title')) {
+      $('deps-banner-title').textContent = isEn
+        ? 'On-Demand Local Runtimes (Consent-First · Isolated Sandbox)'
+        : '按需自装运行环境（客户授权制 · 隔离沙箱）';
+    }
+    if ($('deps-banner-desc')) {
+      $('deps-banner-desc').textContent = isEn
+        ? 'Missing optional runtimes can be installed in one click into VA Browser\'s isolated directory after your explicit consent — never polluting system Python.'
+        : '缺什么依赖可在此一键自装，均安装至浏览器隔离目录（不污染系统环境）；每次安装前均需你的明确授权，安装后自动可用并支持随时清理。';
+    }
+    if ($('btn-deps-open-dir')) {
+      $('btn-deps-open-dir').textContent = isEn ? '📂 Open Runtimes Folder' : '📂 打开隔离目录';
+      $('btn-deps-open-dir').onclick = () => cmd('dep-open-dir');
+    }
+
+    const items = depsInfo?.items || [];
+    list.replaceChildren(...items.map(dep => {
+      const prog = depLiveProgress[dep.id] || dep.progress;
+      const isInstalling = Boolean(dep.installing || prog?.status === 'installing' || prog?.status === 'verifying');
+      const card = document.createElement('article');
+      card.className = 'hub-card' + (dep.installed ? ' is-ready' : '');
+
+      const head = document.createElement('div');
+      head.className = 'hub-card-head';
+      const left = document.createElement('div');
+      const h3 = document.createElement('h3');
+      h3.className = 'hub-card-title';
+      h3.textContent = isEn ? dep.name_en : dep.name;
+      const p = document.createElement('p');
+      p.className = 'hub-card-desc';
+      p.textContent = isEn ? dep.purpose_en : dep.purpose;
+      left.append(h3, p);
+
+      const badge = document.createElement('span');
+      if (isInstalling) {
+        badge.className = 'status-badge is-active';
+        badge.textContent = (isEn ? 'Installing ' : '安装中 ') + `${prog?.pct || 0}%`;
+      } else if (dep.installed) {
+        badge.className = 'status-badge is-active';
+        const srcText = dep.source === 'isolated_venv' ? (isEn ? 'Isolated' : '隔离环境')
+          : dep.source === 'local_model' ? (isEn ? 'Local Model' : '本地模型')
+          : (isEn ? 'System' : '系统已装');
+        badge.textContent = `✓ ${srcText}${dep.version ? ' · ' + dep.version : ''}`;
+      } else {
+        badge.className = 'status-badge is-idle';
+        badge.textContent = isEn ? `Missing · ${dep.size_hint}` : `未安装 · 约 ${dep.size_hint}`;
+      }
+      head.append(left, badge);
+
+      const meta = document.createElement('div');
+      meta.className = 'dep-meta-row';
+      for (const tag of (isEn ? dep.used_by_en : dep.used_by) || []) {
+        const pill = document.createElement('span');
+        pill.className = 'dep-tag';
+        pill.textContent = tag;
+        meta.appendChild(pill);
+      }
+      const pathSpan = document.createElement('span');
+      pathSpan.className = 'hub-tools-note';
+      pathSpan.textContent = (isEn ? 'Path: ' : '路径: ') + (dep.binary_path || dep.install_path || '');
+      meta.appendChild(pathSpan);
+
+      card.append(head, meta);
+
+      if (isInstalling || (prog && prog.status === 'error')) {
+        const pWrap = document.createElement('div');
+        pWrap.className = 'dep-modal-progress';
+        const track = document.createElement('div');
+        track.className = 'dep-modal-track';
+        const bar = document.createElement('div');
+        bar.className = 'dep-modal-bar' + (prog?.status === 'error' ? ' is-err' : '');
+        bar.style.width = `${prog?.status === 'error' ? 100 : Math.max(5, prog?.pct || 5)}%`;
+        track.appendChild(bar);
+        const msg = document.createElement('div');
+        msg.className = 'dep-modal-msg';
+        msg.textContent = (prog?.stage || '') + (prog?.log ? ` — ${prog.log}` : '');
+        pWrap.append(track, msg);
+        card.appendChild(pWrap);
+      }
+
+      // Explicit inline consent strip before any installation begins
+      if (confirmingDepId === dep.id && !isInstalling && !dep.installed) {
+        const strip = document.createElement('div');
+        strip.className = 'dep-confirm-strip';
+        const txt = document.createElement('div');
+        txt.className = 'dep-confirm-text';
+        txt.textContent = isEn
+          ? `Confirm download & isolated install (${dep.size_hint}) to ${dep.install_path}?`
+          : `确认授权下载并安装（约 ${dep.size_hint}）到 ${dep.install_path}？安装后可立即调用且随时可卸载。`;
+        const cBtns = document.createElement('div');
+        cBtns.className = 'card-actions';
+        const yesBtn = document.createElement('button');
+        yesBtn.type = 'button';
+        yesBtn.className = 'btn-primary-sm';
+        yesBtn.textContent = isEn ? '✓ Approve & Install' : '✓ 同意并开始安装';
+        yesBtn.onclick = async () => {
+          confirmingDepId = null;
+          depLiveProgress[dep.id] = { id: dep.id, status: 'installing', pct: 4, stage: isEn ? 'Starting approved install…' : '已获授权，正在启动安装…', log: '' };
+          renderDeps();
+          setFooter(isEn ? `Installing ${dep.name_en}…` : `正在安装 ${dep.name}…`);
+          try {
+            const installed = await cmd('dep-install', { id: dep.id, approved: true, reason: 'runtime_manager_confirmed' });
+            delete depLiveProgress[dep.id];
+            setFooter(isEn ? `✓ Installed ${dep.name_en} (${installed.version})` : `✓ ${dep.name} 安装校验完成（${installed.version}）`, 'ok');
+            await refresh();
+          } catch (err) {
+            depLiveProgress[dep.id] = { id: dep.id, status: 'error', pct: 0, stage: err?.message || String(err), log: '' };
+            setFooter(err?.message || String(err), 'err');
+            renderDeps();
+          }
+        };
+        const noBtn = document.createElement('button');
+        noBtn.type = 'button';
+        noBtn.className = 'btn-outline-sm';
+        noBtn.textContent = isEn ? 'Cancel' : '取消';
+        noBtn.onclick = () => { confirmingDepId = null; renderDeps(); };
+        cBtns.append(yesBtn, noBtn);
+        strip.append(txt, cBtns);
+        card.appendChild(strip);
+      }
+
+      const foot = document.createElement('div');
+      foot.className = 'hub-card-foot';
+      const note = document.createElement('span');
+      note.className = 'hub-tools-note';
+      note.textContent = isEn ? (dep.fallback_note_en || '') : (dep.fallback_note || '');
+
+      const btns = document.createElement('div');
+      btns.className = 'card-actions';
+      if (isInstalling) {
+        const cancelBtn = document.createElement('button');
+        cancelBtn.type = 'button';
+        cancelBtn.className = 'btn-outline-sm';
+        cancelBtn.textContent = isEn ? 'Cancel Install' : '取消安装';
+        cancelBtn.onclick = async () => {
+          await cmd('dep-cancel', { id: dep.id });
+          delete depLiveProgress[dep.id];
+          setFooter(isEn ? 'Install cancelled.' : '已取消安装。');
+          await refresh();
+        };
+        btns.appendChild(cancelBtn);
+      } else if (!dep.installed) {
+        if (confirmingDepId !== dep.id) {
+          const instBtn = document.createElement('button');
+          instBtn.type = 'button';
+          instBtn.className = 'btn-primary-sm';
+          instBtn.textContent = isEn ? `Install (${dep.size_hint})` : `一键自装（${dep.size_hint}）`;
+          instBtn.onclick = () => { confirmingDepId = dep.id; renderDeps(); };
+          btns.appendChild(instBtn);
+        }
+      } else {
+        const recheckBtn = document.createElement('button');
+        recheckBtn.type = 'button';
+        recheckBtn.className = 'btn-outline-sm';
+        recheckBtn.textContent = isEn ? 'Re-verify' : '重新校验';
+        recheckBtn.onclick = () => refresh();
+        btns.appendChild(recheckBtn);
+        if (dep.removable) {
+          const rmBtn = document.createElement('button');
+          rmBtn.type = 'button';
+          rmBtn.className = 'btn-outline-sm';
+          rmBtn.textContent = isEn ? 'Clean Uninstall' : '卸载清理';
+          rmBtn.onclick = async () => {
+            await cmd('dep-uninstall', { id: dep.id });
+            setFooter(isEn ? `Removed isolated ${dep.name_en}.` : `✓ 已清理隔离目录：${dep.name}`, 'ok');
+            await refresh();
+          };
+          btns.appendChild(rmBtn);
+        }
+      }
+      foot.append(note, btns);
+      card.appendChild(foot);
+      return card;
+    }));
+  }
+
   function switchTab(next) {
     activeTab = next;
-    for (const [id, name] of [['tab-all', 'all'], ['tab-connected', 'connected'], ['tab-hub', 'hub'], ['tab-manual', 'manual']]) {
+    for (const [id, name] of [['tab-all', 'all'], ['tab-connected', 'connected'], ['tab-hub', 'hub'], ['tab-deps', 'deps'], ['tab-manual', 'manual']]) {
       const el = $(id);
       if (!el) continue;
       const active = name === next;
@@ -455,12 +662,14 @@
     busy = true;
     render();
     try {
-      const [data, hub] = await Promise.all([
+      const [data, hub, deps] = await Promise.all([
         cmd('mcp-connector-info'),
         cmd('hub-status').catch(() => null),
+        cmd('dep-list').catch(() => null),
       ]);
       if (data) info = data;
       if (hub) hubInfo = hub;
+      if (deps) depsInfo = deps;
     } catch (err) {
       setFooter(err?.message || String(err), 'err');
     } finally {
@@ -514,6 +723,7 @@
   $('tab-all').onclick = () => switchTab('all');
   $('tab-connected').onclick = () => switchTab('connected');
   if ($('tab-hub')) $('tab-hub').onclick = () => switchTab('hub');
+  if ($('tab-deps')) $('tab-deps').onclick = () => switchTab('deps');
   $('tab-manual').onclick = () => switchTab('manual');
   switchTab(activeTab);
   $('search-input').oninput = e => { query = e.target.value; render(); };

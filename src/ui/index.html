@@ -290,10 +290,34 @@
               <label>R mm<input id="cad-radius" type="number" min="0" max="60" step="1"></label>
               <label>Draft°<input id="cad-draft" type="number" min="0" max="15" step="0.5"></label>
             </div>
+            <div class="cad-engine-row">
+              <select id="cad-engine-select" aria-label="CAD Kernel">
+                <option value="builtin">⚡ Built-in Fast Draft (Zero-Dep)</option>
+                <option value="cadquery">💎 Precision OCCT Kernel (CadQuery)</option>
+              </select>
+              <button id="bt-open-deps" type="button" class="mini-link-btn" title="Manage optional local runtimes">📦 Runtimes</button>
+            </div>
+            <div id="bt-cad-consent" class="dep-consent-box" hidden>
+              <div class="dep-consent-head">
+                <strong id="bt-cad-consent-title">Missing local dependency — install with consent?</strong>
+                <span id="bt-cad-consent-size" class="hub-badge is-warn">~180 MB</span>
+              </div>
+              <p id="bt-cad-consent-desc" class="dep-consent-desc"></p>
+              <div id="bt-cad-consent-path" class="dep-consent-path"></div>
+              <div id="bt-cad-progress-wrap" class="dep-progress-wrap" hidden>
+                <div class="dep-progress-track"><div id="bt-cad-progress-bar" class="dep-progress-bar"></div></div>
+                <div id="bt-cad-progress-msg" class="dep-progress-msg">Preparing…</div>
+              </div>
+              <div class="dep-consent-actions">
+                <button id="bt-cad-consent-approve" type="button" class="btn-cta bt-consent-btn">✓ Approve Install &amp; Run</button>
+                <button id="bt-cad-consent-fallback" type="button" class="mini-link-btn">Use Built-in</button>
+                <button id="bt-cad-consent-cancel" type="button" class="mini-link-btn">Cancel</button>
+              </div>
+            </div>
             <button id="bt-run-cad" type="button" class="btn-cta-soft bt-full-btn">📐 Generate Model Draft (STEP/STL/DXF)</button>
             <div id="bt-cad-result" class="hub-res-box" hidden>
               <img id="bt-cad-svg" class="cad-preview-img" alt="Model Draft Blueprint">
-              <div class="hub-res-top"><span id="bt-cad-dfm-badge" class="hub-badge is-ok">PASS</span><span id="bt-cad-mass" class="hub-meta-mono"></span></div>
+              <div class="hub-res-top"><span id="bt-cad-dfm-badge" class="hub-badge is-ok">PASS</span><span id="bt-cad-kernel-badge" class="hub-badge" hidden>OCCT</span><span id="bt-cad-mass" class="hub-meta-mono"></span></div>
               <div id="bt-cad-checks" class="cad-check-list"></div>
               <div class="cad-action-row">
                 <button id="bt-cad-open-dir" type="button" class="mini-link-btn">📂 Open Folder</button>

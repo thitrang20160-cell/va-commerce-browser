@@ -468,7 +468,13 @@ export function buildCadQueryScript(spec) {
 # Open in CQ-Editor / FreeCAD / Python CadQuery (OCCT B-Rep Kernel)
 # NOTE: Engineering Model Draft — confirm parting line, shrinkage & draft with mold factory before tooling.
 
+import argparse, json, os
 import cadquery as cq
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--out-dir", default=".")
+args = parser.parse_args()
+os.makedirs(args.out_dir, exist_ok=True)
 
 LENGTH = ${L}      # mm
 WIDTH = ${W}       # mm
@@ -478,32 +484,53 @@ CORNER_R = ${R}    # mm
 DRAFT_DEG = ${draft_deg}  # deg
 TEMPLATE = "${template}"
 
+def build_rounded_prism(l, w, h, r, taper_deg=0.0):
+    rr = max(0.0, min(r, l / 4.0, w / 4.0))
+    sk = cq.Workplane("XY").sketch().rect(l, w)
+    if rr > 0.2:
+        sk = sk.vertices().fillet(rr)
+    return sk.finalize().extrude(h, taper=-taper_deg if taper_deg > 0 else 0.0)
+
 if TEMPLATE == "stand_holder":
-    base = cq.Workplane("XY").box(LENGTH, WIDTH, WALL)
-    back = cq.Workplane("XY").transformed(offset=(0, WIDTH/2 - WALL/2, HEIGHT/2)).box(LENGTH, WALL, HEIGHT)
-    lip = cq.Workplane("XY").transformed(offset=(0, -WIDTH/2 + WALL/2, 10)).box(LENGTH, WALL, 20)
+    base = cq.Workplane("XY").box(LENGTH, WIDTH, WALL, centered=(True, True, False))
+    back = cq.Workplane("XY").transformed(offset=(0, WIDTH/2 - WALL/2, 0)).box(LENGTH, WALL, HEIGHT, centered=(True, True, False))
+    lip = cq.Workplane("XY").transformed(offset=(0, -WIDTH/2 + WALL/2, 0)).box(LENGTH, WALL, min(20.0, HEIGHT * 0.4), centered=(True, True, False))
     result = base.union(back).union(lip)
 else:
-    outer = (
+    outer = build_rounded_prism(LENGTH, WIDTH, HEIGHT, CORNER_R, DRAFT_DEG)
+    inner_l = max(4.0, LENGTH - 2.0 * WALL)
+    inner_w = max(4.0, WIDTH - 2.0 * WALL)
+    inner_r = max(0.0, CORNER_R - WALL)
+    cavity = (
         cq.Workplane("XY")
-        .rect(LENGTH, WIDTH)
-        .extrude(HEIGHT, taper=-DRAFT_DEG if DRAFT_DEG > 0 else 0)
+        .workplane(offset=WALL)
+        .sketch()
+        .rect(inner_l, inner_w)
     )
-    if CORNER_R > 0:
-        outer = outer.edges("|Z").fillet(min(CORNER_R, LENGTH/4, WIDTH/4))
-    result = outer.faces(">Z").shell(-WALL)
+    if inner_r > 0.2:
+        cavity = cavity.vertices().fillet(min(inner_r, inner_l / 4.0, inner_w / 4.0))
+    cavity_solid = cavity.finalize().extrude(HEIGHT, taper=-DRAFT_DEG if DRAFT_DEG > 0 else 0.0)
+    result = outer.cut(cavity_solid)
 ${template === 'organizer_tray' && (cx > 1 || cy > 1) ? `
     # Internal dividers (${cx} x ${cy})
     for i in range(1, ${cx}):
         x = -LENGTH/2 + (LENGTH / ${cx}) * i
-        result = result.union(cq.Workplane("XY").transformed(offset=(x, 0, HEIGHT/2)).box(WALL, WIDTH - 2*WALL, HEIGHT - WALL))
+        result = result.union(cq.Workplane("XY").transformed(offset=(x, 0, WALL)).box(WALL, inner_w, max(2.0, HEIGHT - WALL), centered=(True, True, False)))
     for j in range(1, ${cy}):
         y = -WIDTH/2 + (WIDTH / ${cy}) * j
-        result = result.union(cq.Workplane("XY").transformed(offset=(0, y, HEIGHT/2)).box(LENGTH - 2*WALL, WALL, HEIGHT - WALL))` : ''}
+        result = result.union(cq.Workplane("XY").transformed(offset=(0, y, WALL)).box(inner_l, WALL, max(2.0, HEIGHT - WALL), centered=(True, True, False)))` : ''}
 
-cq.exporters.export(result, "${(spec.asin || template)}_cadquery.step")
-cq.exporters.export(result, "${(spec.asin || template)}_cadquery.stl")
-print("Exported STEP & STL successfully.")
+step_path = os.path.join(args.out_dir, "model-draft.step")
+stl_path = os.path.join(args.out_dir, "prototype-3dprint.stl")
+cq.exporters.export(result, step_path)
+cq.exporters.export(result, stl_path)
+vol_cm3 = round(float(result.val().Volume()) / 1000.0, 2)
+print("VA_CAD_RESULT:" + json.dumps({
+    "ok": True,
+    "volume_cm3": vol_cm3,
+    "step_path": step_path,
+    "stl_path": stl_path,
+}))
 `;
 }
 
@@ -662,6 +689,7 @@ export function generateModelDraft(rawInput = {}, outRootDir) {
     ok: true,
     created_at: new Date().toISOString(),
     source: 'va_cad_draft_engine',
+    kernel: 'builtin_parametric',
     spec: {
       template: spec.template,
       template_name: spec.template_name,
@@ -680,5 +708,31 @@ export function generateModelDraft(rawInput = {}, outRootDir) {
     files,
     rfq_text: rfqText,
     preview_svg_data_uri: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgContent),
+  };
+}
+
+export function applyCadQueryCompileResult(draft, occtResult) {
+  if (!draft || !occtResult?.ok) return draft;
+  const mat = CAD_MATERIALS[draft.spec?.material] || CAD_MATERIALS.food_grade_silicone;
+  const nextDfm = { ...(draft.dfm || {}) };
+  if (Number.isFinite(Number(occtResult.volume_cm3)) && Number(occtResult.volume_cm3) > 0) {
+    const vol = round2(Number(occtResult.volume_cm3));
+    const weightG = round2(vol * mat.density);
+    nextDfm.volume_cm3 = vol;
+    nextDfm.weight_g = weightG;
+    nextDfm.weight_kg = round2(weightG / 1000);
+    nextDfm.est_material_cny = round2((weightG / 1000) * mat.cnyPerKg);
+  }
+  return {
+    ...draft,
+    source: 'cadquery_occt',
+    kernel: 'cadquery_occt',
+    cadquery_version: occtResult.cadquery_version || 'ok',
+    dfm: nextDfm,
+    files: {
+      ...(draft.files || {}),
+      step: occtResult.step_path || draft.files?.step,
+      stl: occtResult.stl_path || draft.files?.stl,
+    },
   };
 }

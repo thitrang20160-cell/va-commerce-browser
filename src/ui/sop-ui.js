@@ -7,6 +7,20 @@ function bindSopStudio($, command) {
   let busy1688 = false;
   let lastCadAsin = null;
   let lastSavedTimer = null;
+  let pendingCadDep = null;
+  let installingCadDep = false;
+
+  if (window.browserUI && typeof window.browserUI.subscribeDepProgress === 'function') {
+    window.browserUI.subscribeDepProgress(prog => {
+      if (!prog || prog.id !== 'cadquery') return;
+      const wrap = $('bt-cad-progress-wrap');
+      const bar = $('bt-cad-progress-bar');
+      const msg = $('bt-cad-progress-msg');
+      if (wrap) wrap.hidden = false;
+      if (bar) bar.style.width = `${Math.max(4, Math.min(100, Number(prog.pct) || 0))}%`;
+      if (msg) msg.textContent = prog.stage + (prog.log ? ` · ${prog.log.slice(-70)}` : '');
+    });
+  }
 
   const isEn = () => (state?.locale || 'zh-CN') === 'en';
   const hasSellerStar = () => Array.isArray(state?.enabled_panels) && state.enabled_panels.includes('sellerstar-batch');
@@ -427,29 +441,126 @@ function bindSopStudio($, command) {
         setMsg(`✓ 已根据商品标题与痛点推演尺寸：${inferred.length_mm}×${inferred.width_mm}×${inferred.height_mm}mm`);
       };
     }
+    if ($('bt-open-deps')) {
+      $('bt-open-deps').onclick = () => command('mcp-connector-open', { tab: 'deps' });
+    }
+
+    const renderCadConsent = () => {
+      const box = $('bt-cad-consent');
+      if (!box) return;
+      if (!pendingCadDep) {
+        box.hidden = true;
+        return;
+      }
+      box.hidden = false;
+      const d = pendingCadDep;
+      if ($('bt-cad-consent-title')) {
+        $('bt-cad-consent-title').textContent = isEn()
+          ? `Missing dependency: ${d.name_en || d.name}`
+          : `缺少本地依赖：${d.name}`;
+      }
+      if ($('bt-cad-consent-size')) $('bt-cad-consent-size').textContent = d.size_hint || '';
+      if ($('bt-cad-consent-desc')) {
+        $('bt-cad-consent-desc').textContent = isEn()
+          ? `${d.purpose_en || d.purpose} After installation finishes, modeling will run automatically.`
+          : `${d.purpose} 同意安装后将自动配置隔离环境，安装完成立即继续建模。`;
+      }
+      if ($('bt-cad-consent-path')) {
+        $('bt-cad-consent-path').textContent = (isEn() ? 'Isolated path: ' : '隔离安装位置：') + (d.install_path || '');
+      }
+      if ($('bt-cad-progress-wrap')) $('bt-cad-progress-wrap').hidden = !installingCadDep;
+      const approveBtn = $('bt-cad-consent-approve');
+      const fallbackBtn = $('bt-cad-consent-fallback');
+      const cancelBtn = $('bt-cad-consent-cancel');
+      if (approveBtn) {
+        approveBtn.disabled = installingCadDep;
+        approveBtn.textContent = installingCadDep
+          ? (isEn() ? 'Installing in isolated venv…' : '正在隔离安装，完成后自动建模…')
+          : (isEn() ? '✓ Approve Install & Auto-Run' : '✓ 同意安装并自动建模');
+        approveBtn.onclick = async () => {
+          if (installingCadDep) return;
+          installingCadDep = true;
+          renderCadConsent();
+          setMsg('已获同意，正在自动部署 CadQuery 隔离环境（安装后将自动建模）…');
+          try {
+            const installed = await command('dep-install', { id: d.id, approved: true, reason: 'cad_model_draft_auto_invoke' });
+            if (installed?.installed) {
+              pendingCadDep = null;
+              installingCadDep = false;
+              renderCadConsent();
+              setMsg(`✓ ${d.name} 安装完成（${installed.version}），正在自动调用生成高精度实体模型…`);
+              await runCadGenerate('cadquery');
+            }
+          } catch (err) {
+            installingCadDep = false;
+            renderCadConsent();
+            setMsg('安装未完成：' + (err?.message || String(err)));
+          }
+        };
+      }
+      if (fallbackBtn) {
+        fallbackBtn.disabled = installingCadDep;
+        fallbackBtn.onclick = async () => {
+          pendingCadDep = null;
+          if ($('cad-engine-select')) $('cad-engine-select').value = 'builtin';
+          renderCadConsent();
+          await runCadGenerate('builtin');
+        };
+      }
+      if (cancelBtn) {
+        cancelBtn.onclick = async () => {
+          if (installingCadDep) {
+            await command('dep-cancel', { id: d.id });
+            installingCadDep = false;
+          }
+          pendingCadDep = null;
+          renderCadConsent();
+          setMsg('已取消安装。你仍可使用内置零依赖引擎快速生成草稿。');
+        };
+      }
+    };
+
+    const runCadGenerate = async forcedEngine => {
+      if (busyCad) return;
+      const chosenEngine = forcedEngine || $('cad-engine-select')?.value || 'builtin';
+      busyCad = true;
+      renderBoutiqueCard();
+      setMsg(chosenEngine === 'cadquery'
+        ? '正在检查高精度 CadQuery (OCCT) 环境并生成模型草稿…'
+        : '正在生成参数化模型草稿（.STEP + .STL + .DXF + 蓝图 + 工厂工艺单）…');
+      try {
+        const res = await command('sop-cad-generate', { asin: active.asin, spec: readCadInputs(), engine: chosenEngine });
+        if (res?.missing_dependency) {
+          pendingCadDep = res.missing_dependency;
+          installingCadDep = false;
+          renderCadConsent();
+          setMsg(`检测到本机尚未安装「${res.missing_dependency.name}」，请在上方确认是否自动安装。`);
+          return;
+        }
+        if (res?.draft) {
+          pendingCadDep = null;
+          const kLabel = res.draft.kernel === 'cadquery_occt' ? ' [OCCT 实体内核]' : '';
+          setMsg(`✓ 模型草稿已生成${kLabel}：${res.draft.dfm?.weight_g}g · ${res.draft.dfm?.fba_tier}（已保存至 ${res.draft.files?.dir || '草稿目录'}）。`);
+        }
+      } catch (err) {
+        setMsg('生成失败：' + (err?.message || String(err)));
+      } finally {
+        busyCad = false;
+        renderBoutiqueCard();
+      }
+    };
+
+    renderCadConsent();
+
     const cadBtn = $('bt-run-cad');
     if (cadBtn) {
-      cadBtn.disabled = busyCad;
+      cadBtn.disabled = busyCad || installingCadDep;
       cadBtn.textContent = busyCad
         ? (isEn() ? 'Generating STEP/STL/DXF…' : '📐 正在生成模型草稿与 DFM 体检…')
         : active.model_draft
           ? (isEn() ? '↻ Regenerate Model Draft' : '📐 按当前参数重新生成模型草稿')
           : (isEn() ? '📐 Generate Model Draft (STEP/STL/DXF)' : '📐 生成模型草稿 (.STEP / .STL / .DXF)');
-      cadBtn.onclick = async () => {
-        if (busyCad) return;
-        busyCad = true;
-        renderBoutiqueCard();
-        setMsg('正在生成参数化模型草稿（.STEP + .STL + .DXF + 蓝图 + 工厂工艺单）…');
-        try {
-          const res = await command('sop-cad-generate', { asin: active.asin, spec: readCadInputs() });
-          if (res?.draft) {
-            setMsg(`✓ 模型草稿已生成：${res.draft.dfm?.weight_g}g · ${res.draft.dfm?.fba_tier}（已保存至 ${res.draft.files?.dir || '草稿目录'}）。`);
-          }
-        } finally {
-          busyCad = false;
-          renderBoutiqueCard();
-        }
-      };
+      cadBtn.onclick = () => runCadGenerate();
     }
 
     const cadBox = $('bt-cad-result');
@@ -461,6 +572,16 @@ function bindSopStudio($, command) {
       const badge = $('bt-cad-dfm-badge');
       badge.textContent = `DFM ${dfm.status_label || 'OK'}`;
       badge.className = 'hub-badge ' + (dfm.warn_count ? 'is-warn' : 'is-ok');
+      const kBadge = $('bt-cad-kernel-badge');
+      if (kBadge) {
+        if (draft.kernel === 'cadquery_occt') {
+          kBadge.hidden = false;
+          kBadge.textContent = '✓ OCCT 实体内核';
+          kBadge.className = 'hub-badge is-ok';
+        } else {
+          kBadge.hidden = true;
+        }
+      }
       $('bt-cad-mass').textContent = `${dfm.weight_g ?? '—'}g · ¥${dfm.est_material_cny ?? '—'}料 · ${dfm.fba_tier || ''}`;
       $('bt-cad-checks').replaceChildren(...(dfm.checks || []).map(c => {
         const row = document.createElement('div');
