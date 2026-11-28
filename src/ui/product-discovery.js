@@ -8,8 +8,8 @@ function bindProductDiscovery($, command) {
   const statuses = {
     verification_required: '亚马逊要求验证。请打开新标签中的验证页，完成后点「分析当前 Amazon 页面」。',
     sign_in_required: '亚马逊要求登录。登录后可分析当前页面。',
-    browser_busy: 'VaMoon 正在采集或暂停中，请先处理已有任务。',
-    keyword_needed: '请补充英文搜索词。',
+    browser_busy: '浏览器当前处于「暂停接管」或忙碌状态，请先点击上方「恢复 Agent」再试。',
+    keyword_needed: '暂未自动映射到英文词，已为你展开下方「Amazon 英文搜索词」，填写后点「开始发掘」即可。',
     no_results: '本页还未识别到商品。可换关键词或分析已打开的搜索页。',
     page_loading: '页面还在加载，请稍后分析当前页。',
     unsupported_store: '请先打开 Amazon 美国站的搜索结果页。',
@@ -114,7 +114,15 @@ function bindProductDiscovery($, command) {
     try {
       result = await command('product-discovery', input);
       if (!result) { message.textContent = '读取失败，请根据提示检查页面。'; return; }
-      if (result.status !== 'ok') { message.textContent = statuses[result.status] ?? '当前页没有可读的选品数据。'; return; }
+      if (result.status !== 'ok') {
+        message.textContent = statuses[result.status] ?? '当前页没有可读的选品数据。';
+        if (result.status === 'keyword_needed') {
+          const drawer = panel.querySelector('.advanced-drawer');
+          if (drawer) drawer.open = true;
+          $('discovery-keyword')?.focus();
+        }
+        return;
+      }
       const { plan } = result;
       const basis = result.items[0]?.ranking_basis;
       const ranking = basis === 'monthly_contribution_scenario' ? '按月贡献情景排序。' : basis === 'unit_contribution' ? '按单件贡献排序。' : '';

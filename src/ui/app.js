@@ -55,10 +55,12 @@ document.querySelectorAll('.seg-pills[data-sync-select]').forEach(group => {
 document.querySelectorAll('#discovery-presets .preset-chip').forEach(chip => {
   chip.onclick = () => {
     const input = $('discovery-intent');
+    const kw = $('discovery-keyword');
     if (input) {
       input.value = chip.getAttribute('data-prompt') || '';
       input.focus();
     }
+    if (kw) kw.value = chip.getAttribute('data-keyword') || '';
   };
 });
 
