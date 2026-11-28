@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="vaBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#19808a"/>
+      <stop offset="52%" stop-color="#11555d"/>
+      <stop offset="100%" stop-color="#092d34"/>
+    </linearGradient>
+    <linearGradient id="vaRim" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#5eead4" stop-opacity="0.92"/>
+      <stop offset="50%" stop-color="#2dd4bf" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#0d9488" stop-opacity="0.72"/>
+    </linearGradient>
+    <radialGradient id="vaGlow" cx="30%" cy="20%" r="72%">
+      <stop offset="0%" stop-color="#5eead4" stop-opacity="0.28"/>
+      <stop offset="65%" stop-color="#14b8a6" stop-opacity="0.06"/>
+      <stop offset="100%" stop-color="#0a343b" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="vaInk" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#99f6e4"/>
+    </linearGradient>
+  </defs>
+  <!-- Rounded squircle matching .mark (border-radius ~28%) with slight desktop-icon safe margin -->
+  <rect x="24" y="24" width="464" height="464" rx="122" ry="122" fill="url(#vaBg)"/>
+  <rect x="24" y="24" width="464" height="464" rx="122" ry="122" fill="url(#vaGlow)"/>
+  <rect x="31" y="31" width="450" height="450" rx="115" ry="115" fill="none" stroke="url(#vaRim)" stroke-width="14"/>
+  <!-- Crisp geometric VA monogram (paths only, zero font-dependency across OSes) -->
+  <!-- V -->
+  <path d="M96 164 L145 164 L191 296 L237 164 L285 164 L214 352 L167 352 Z" fill="url(#vaInk)"/>
+  <!-- A -->
+  <path fill-rule="evenodd" d="M312 164 L362 164 L424 352 L374 352 L361 310 L309 310 L296 352 L248 352 Z M335 212 L319 271 L351 271 Z" fill="url(#vaInk)"/>
+</svg>

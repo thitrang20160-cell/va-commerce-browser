@@ -13,6 +13,19 @@ import { createPluginHost, loadOptionalExtensionModule, resolveMode } from './pl
 import { inspectMcpConnector, installMcpClient, uninstallMcpClient } from './mcp-connector.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
+const projectRoot = path.dirname(here);
+const appIconIco = path.join(projectRoot, 'build', 'icon.ico');
+const appIconPng = path.join(projectRoot, 'build', 'icon.png');
+const windowIcon = (process.platform === 'win32' && fs.existsSync(appIconIco))
+  ? appIconIco
+  : (fs.existsSync(appIconPng) ? appIconPng : undefined);
+
+function titleBarOverlayOptions(theme) {
+  return theme === 'light'
+    ? { color: '#ebf1f4', symbolColor: '#0f242c', height: 41 }
+    : { color: '#090d12', symbolColor: '#93a9b5', height: 41 };
+}
+
 function argument(name) {
   const at = process.argv.indexOf(name);
   return at < 0 ? null : process.argv[at + 1];
@@ -74,6 +87,7 @@ function openMcpModal() {
   mcpModal = new BrowserWindow({
     parent: window,
     modal: true,
+    icon: windowIcon,
     width: modalWidth,
     height: modalHeight,
     x,
@@ -132,6 +146,7 @@ function openDiscoveryModal(result, focusAsin = null) {
   discoveryModal = new BrowserWindow({
     parent: window,
     modal: true,
+    icon: windowIcon,
     width: modalWidth,
     height: modalHeight,
     x,
@@ -169,13 +184,13 @@ app.whenReady().then(async () => {
     const shortcut = path.join(programs, packageInfo.productName + '.lnk');
     try {
       fs.mkdirSync(programs, { recursive: true });
-      if (!fs.existsSync(shortcut)) {
-        const installed = shell.writeShortcutLink(shortcut, 'create', {
-          target: process.execPath, args: '"' + path.dirname(here) + '"', cwd: path.dirname(here),
-          description: packageInfo.productName, appUserModelId: process.execPath,
-        });
-        if (!installed) console.warn('Could not register browser notifications with Windows.');
-      }
+      const op = fs.existsSync(shortcut) ? 'update' : 'create';
+      const installed = shell.writeShortcutLink(shortcut, op, {
+        target: process.execPath, args: '"' + projectRoot + '"', cwd: projectRoot,
+        icon: fs.existsSync(appIconIco) ? appIconIco : process.execPath, iconIndex: 0,
+        description: packageInfo.productName, appUserModelId: process.execPath,
+      });
+      if (!installed) console.warn('Could not register browser notifications with Windows.');
     } catch { console.warn('Could not register browser notifications with Windows.'); }
   }
 
@@ -187,10 +202,17 @@ app.whenReady().then(async () => {
     mode,
   });
 
+  const isMac = process.platform === 'darwin';
   window = new BrowserWindow({
     title: mode === 'oss' ? 'VA Commerce Browser' : packageInfo.productName,
+    icon: windowIcon,
     width: 1420, height: 940, minWidth: 980, minHeight: 640,
-    backgroundColor: theme === 'light' ? '#f4f7f9' : '#0b0f14', autoHideMenuBar: true,
+    backgroundColor: theme === 'light' ? '#f4f7f9' : '#0b0f14',
+    autoHideMenuBar: true,
+    titleBarStyle: isMac ? 'hiddenInset' : 'hidden',
+    ...(isMac
+      ? { trafficLightPosition: { x: 14, y: 14 } }
+      : { titleBarOverlay: titleBarOverlayOptions(theme) }),
     webPreferences: { preload: path.join(here, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true },
   });
 
@@ -204,6 +226,8 @@ app.whenReady().then(async () => {
   }, { mode, locale, theme, plugins, sellerStar: extensionContext.sellerStar ?? null });
 
   window.on('resize', () => engine.layout());
+  window.on('maximize', () => engine.layout());
+  window.on('unmaximize', () => engine.layout());
   window.on('close', saveTabs);
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', event => event.preventDefault());
@@ -288,6 +312,9 @@ app.whenReady().then(async () => {
     if (command === 'set-theme') {
       engine.theme = saveTheme(dataDir, payload.theme);
       window.setBackgroundColor(engine.theme === 'light' ? '#f4f7f9' : '#0b0f14');
+      if (!isMac && typeof window.setTitleBarOverlay === 'function') {
+        window.setTitleBarOverlay(titleBarOverlayOptions(engine.theme));
+      }
       engine.emit();
       return engine.state();
     }

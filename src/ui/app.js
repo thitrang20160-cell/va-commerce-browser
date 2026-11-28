@@ -103,6 +103,7 @@ function update(state) {
   const nextMode = state.mode || 'internal';
   const nextTheme = state.theme === 'light' ? 'light' : 'dark';
   document.documentElement.dataset.theme = nextTheme;
+  if (state.platform) document.documentElement.dataset.platform = state.platform;
   if ($('theme-icon-sun')) $('theme-icon-sun').hidden = nextTheme === 'light';
   if ($('theme-icon-moon')) $('theme-icon-moon').hidden = nextTheme !== 'light';
 

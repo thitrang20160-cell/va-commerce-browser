@@ -102,6 +102,7 @@ export class BrowserEngine {
       app: packageInfo.productName,
       version: packageInfo.version,
       mode: this.mode,
+      platform: process.platform,
       locale: this.locale,
       theme: this.theme,
       sidebar_open: this.sidebarOpen,

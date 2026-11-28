@@ -1,7 +1,7 @@
 {
   "name": "va-commerce-browser",
   "productName": "VA Commerce Browser",
-  "version": "0.6.4",
+  "version": "0.6.5",
   "author": "VaMoon Contributors",
   "homepage": "https://github.com/thitrang20160-cell/va-commerce-browser",
   "repository": {
@@ -36,11 +36,13 @@
     "appId": "com.vamoon.commerce-browser",
     "productName": "VA Commerce Browser",
     "directories": {
-      "output": "dist"
+      "output": "dist",
+      "buildResources": "build"
     },
     "files": [
       "src/**/*",
       "scripts/**/*",
+      "build/**/*",
       "package.json",
       "LICENSE"
     ],
@@ -48,19 +50,22 @@
       "target": [
         "nsis",
         "zip"
-      ]
+      ],
+      "icon": "build/icon.ico"
     },
     "mac": {
       "target": [
         "dmg",
         "zip"
       ],
+      "icon": "build/icon.png",
       "category": "public.app-category.productivity"
     },
     "linux": {
       "target": [
         "AppImage"
       ],
+      "icon": "build/icon.png",
       "category": "Development"
     }
   }

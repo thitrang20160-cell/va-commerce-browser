@@ -92,15 +92,24 @@ button:disabled { cursor: default; opacity: 0.48; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 999px; }
 
-/* Row 1: 42px Calm Tab Strip */
+/* Row 1: 42px Calm Frameless Tab Strip (merged with native window controls) */
 header {
   height: 42px;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 0 10px 0 12px;
+  padding: 0 144px 0 12px;
+  padding-right: max(144px, calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, calc(100vw - 144px)) + 8px));
   background: var(--chrome-top);
   border-bottom: 1px solid var(--border);
+  -webkit-app-region: drag;
+  user-select: none;
+}
+html[data-platform="darwin"] header {
+  padding: 0 12px 0 82px;
+}
+.tab, .tab button, #new, .top-utils, .top-utils button {
+  -webkit-app-region: no-drag;
 }
 .brand {
   display: flex;
