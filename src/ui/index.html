@@ -2,7 +2,7 @@
 <html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https://*.media-amazon.com https://*.ssl-images-amazon.com https://*.images-amazon.com">
   <title>VA Commerce Browser</title>
   <link rel="stylesheet" href="style.css">
 </head>
@@ -200,7 +200,10 @@
 
       <div id="discovery-ranked" class="results-card" hidden>
         <div class="results-bar">
-          <button type="button" id="discovery-select" class="mini-pill-btn" data-i18n="discoverySelectEligible">Select Eligible</button>
+          <div class="results-export">
+            <button type="button" id="discovery-open-modal" class="mini-pill-btn mini-pill-accent" data-i18n="discoveryOpenModal">Visual Gallery</button>
+            <button type="button" id="discovery-select" class="mini-pill-btn" data-i18n="discoverySelectEligible">Select Eligible</button>
+          </div>
           <div class="results-export">
             <button type="button" id="discovery-export-csv" class="mini-pill-btn" data-i18n="discoveryExportCsv">CSV</button>
             <button type="button" id="discovery-export-json" class="mini-pill-btn" data-i18n="discoveryExportJson">JSON</button>

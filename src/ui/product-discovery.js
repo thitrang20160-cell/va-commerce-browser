@@ -6,7 +6,7 @@ function bindProductDiscovery($, command) {
   const panel = $('product-discovery');
   const message = $('discovery-message');
   const statuses = {
-    verification_required: '亚马逊要求验证。请打开新标签中的验证页，完成后点「分析当前 Amazon 页面」。',
+    verification_required: '亚马逊要求验证。请打开新标签中的验证页，完成后点「分析当前页」。',
     sign_in_required: '亚马逊要求登录。登录后可分析当前页面。',
     browser_busy: '浏览器当前处于「暂停接管」或忙碌状态，请先点击上方「恢复 Agent」再试。',
     keyword_needed: '暂未自动映射到英文词，已为你展开下方「Amazon 英文搜索词」，填写后点「开始发掘」即可。',
@@ -29,8 +29,14 @@ function bindProductDiscovery($, command) {
     confirmBtn.textContent = t('discoveryConfirm', selected.size);
     $('discovery-search').disabled = busy;
     $('discovery-current').disabled = busy;
+    if ($('discovery-open-modal')) $('discovery-open-modal').disabled = busy || !result?.items?.length;
     if ($('discovery-export-csv')) $('discovery-export-csv').disabled = busy || !result?.items?.length;
     if ($('discovery-export-json')) $('discovery-export-json').disabled = busy || !result?.items?.length;
+  }
+
+  function openGalleryModal(focusAsin = null) {
+    if (!result?.items?.length) return;
+    command('discovery-modal-open', { result, focus_asin: focusAsin });
   }
 
   function render() {
@@ -39,46 +45,52 @@ function bindProductDiscovery($, command) {
     const ssEnabled = hasSellerStar();
     $('discovery-items').replaceChildren(...result.items.map(item => {
       const row = document.createElement('div');
-      row.className = 'batch-row';
+      row.className = 'batch-row discovery-thumb-row';
       if (ssEnabled) {
         const pick = document.createElement('input');
         pick.type = 'checkbox';
-        pick.disabled = item.decision !== 'eligible';
         pick.checked = selected.has(item.asin);
-        pick.setAttribute('aria-label', '选中 ' + item.title);
-        pick.onchange = () => { if (pick.checked) selected.add(item.asin); else selected.delete(item.asin); updateButtons(); };
+        pick.onclick = e => e.stopPropagation();
+        pick.onchange = () => {
+          if (pick.checked) selected.add(item.asin);
+          else selected.delete(item.asin);
+          updateButtons();
+        };
         row.append(pick);
+      }
+      if (item.image) {
+        const img = document.createElement('img');
+        img.className = 'mini-thumb';
+        img.src = item.image;
+        img.alt = item.title || item.asin;
+        img.loading = 'lazy';
+        img.onerror = () => img.remove();
+        row.append(img);
       }
       const block = document.createElement('div');
       const title = document.createElement('strong');
       title.textContent = item.rank + ' · ' + item.title;
-      const metrics = document.createElement('small');
-      metrics.textContent = [
-        item.asin,
-        item.data.listed_price === null ? '售价待核' : '$' + item.data.listed_price.toFixed(2),
-        item.decision === 'eligible' ? '符合当前条件' : '待核',
-      ].join(' · ');
-      const reason = document.createElement('small');
-      reason.textContent = item.reasons.join(' · ') || '该商品的需求信号尚未取得';
-      const evidence = document.createElement('small');
-      evidence.textContent = (item.data.evidence_source ? item.data.evidence_source + ' ' + item.data.evidence_date + ' · ' : '') +
-        '首次发现 ' + item.data.first_seen.slice(0, 10);
-      const link = document.createElement('button');
-      link.type = 'button';
-      link.textContent = t('discoveryOpenProduct');
-      link.onclick = () => command('new', { url: item.url });
-      block.append(title, metrics, reason, evidence);
-      if (item.data.source_url) {
-        const source = document.createElement('small');
-        source.textContent = '导入货源 ' + item.data.source_url;
-        block.append(source);
-      }
-      if (item.data.target_profit_units !== null) {
-        const units = document.createElement('small');
-        units.textContent = '达到月贡献目标需卖 ' + item.data.target_profit_units + ' 件（情景）';
-        block.append(units);
-      }
-      block.append(link);
+      const meta = document.createElement('small');
+      const price = item.data.listed_price === null ? '售价未知' : '$' + item.data.listed_price.toFixed(2);
+      const decision = item.decision === 'eligible' ? '符合条件' : '待补充数据';
+      meta.textContent = [item.asin, price, decision].join(' · ');
+      const reasons = document.createElement('small');
+      reasons.textContent = item.reasons.slice(0, 2).join(' · ');
+      const actions = document.createElement('div');
+      actions.className = 'mini-row-links';
+      const previewBtn = document.createElement('button');
+      previewBtn.type = 'button';
+      previewBtn.className = 'mini-link-btn';
+      previewBtn.textContent = t('discoveryPreviewItem');
+      previewBtn.onclick = e => { e.stopPropagation(); openGalleryModal(item.asin); };
+      const openBtn = document.createElement('button');
+      openBtn.type = 'button';
+      openBtn.className = 'mini-link-btn';
+      openBtn.textContent = t('discoveryOpenProduct');
+      openBtn.onclick = e => { e.stopPropagation(); command('new', { url: item.url }); };
+      actions.append(previewBtn, openBtn);
+      block.append(title, meta, reasons, actions);
+      row.onclick = () => openGalleryModal(item.asin);
       row.append(block);
       return row;
     }));
@@ -130,11 +142,12 @@ function bindProductDiscovery($, command) {
       message.textContent = (plan.keyword ? plan.keyword + ' · ' : '') + '已读取 ' + result.observed_count + ' 件，排除 ' + result.excluded_count +
         ' 件，列出 ' + result.items.length + ' 件。' + ssHint + ranking;
       render();
+      openGalleryModal();
     } finally { busy = false; updateButtons(); }
   }
 
   async function exportReport(format) {
-    if (!result?.items?.length || busy) return;
+    if (busy || !result?.items?.length) return;
     busy = true;
     updateButtons();
     try {
@@ -148,6 +161,7 @@ function bindProductDiscovery($, command) {
   };
   $('discovery-search').onclick = () => search(false);
   $('discovery-current').onclick = () => search(true);
+  if ($('discovery-open-modal')) $('discovery-open-modal').onclick = () => openGalleryModal();
   $('discovery-select').onclick = () => {
     selected.clear();
     for (const row of result?.items ?? []) if (row.decision === 'eligible') selected.add(row.asin);

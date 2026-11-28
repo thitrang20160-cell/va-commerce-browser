@@ -27,6 +27,9 @@ if (!app.requestSingleInstanceLock()) app.quit();
 
 let window;
 let mcpModal = null;
+let discoveryModal = null;
+let lastDiscoveryData = null;
+let lastDiscoveryFocusAsin = null;
 let engine;
 let service;
 let relay;
@@ -98,6 +101,66 @@ function openMcpModal() {
   return { open: true };
 }
 
+function buildDiscoveryModalPayload() {
+  return {
+    locale: engine?.locale || 'zh-CN',
+    theme: engine?.theme || 'dark',
+    mode,
+    sellerstar_enabled: Boolean(engine?.plugins?.enabledPanels?.().includes('sellerstar-batch')),
+    paused: Boolean(engine?.paused),
+    focus_asin: lastDiscoveryFocusAsin,
+    result: lastDiscoveryData,
+  };
+}
+
+function openDiscoveryModal(result, focusAsin = null) {
+  if (!window || window.isDestroyed()) return { open: false };
+  if (result) lastDiscoveryData = result;
+  lastDiscoveryFocusAsin = focusAsin || null;
+  if (discoveryModal && !discoveryModal.isDestroyed()) {
+    discoveryModal.webContents.send('browser-state', buildDiscoveryModalPayload());
+    discoveryModal.show();
+    discoveryModal.focus();
+    return { open: true };
+  }
+  const modalWidth = 1080;
+  const modalHeight = 736;
+  const parentBounds = window.getBounds();
+  const x = Math.round(parentBounds.x + (parentBounds.width - modalWidth) / 2);
+  const y = Math.round(parentBounds.y + (parentBounds.height - modalHeight) / 2);
+
+  discoveryModal = new BrowserWindow({
+    parent: window,
+    modal: true,
+    width: modalWidth,
+    height: modalHeight,
+    x,
+    y,
+    resizable: true,
+    minWidth: 880,
+    minHeight: 580,
+    minimizable: false,
+    maximizable: true,
+    frame: false,
+    show: false,
+    backgroundColor: engine?.theme === 'light' ? '#f4f7f9' : '#0c1117',
+    webPreferences: {
+      preload: path.join(here, 'preload.cjs'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+  discoveryModal.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  discoveryModal.webContents.on('will-navigate', event => event.preventDefault());
+  discoveryModal.once('ready-to-show', () => {
+    if (discoveryModal && !discoveryModal.isDestroyed()) discoveryModal.show();
+  });
+  discoveryModal.on('closed', () => { discoveryModal = null; });
+  void discoveryModal.loadFile(path.join(here, 'ui', 'discovery-modal.html'));
+  return { open: true };
+}
+
 app.on('second-instance', () => { window?.restore(); window?.focus(); });
 
 app.whenReady().then(async () => {
@@ -155,12 +218,38 @@ app.whenReady().then(async () => {
     'mcp-connector-close',
   ]);
 
+  const DISCOVERY_MODAL_COMMANDS = new Set([
+    'discovery-modal-data',
+    'discovery-modal-close',
+    'discovery-modal-open-url',
+    'discovery-export',
+    'mcp-connector-copy',
+    'sellerstar-batch-start',
+  ]);
+
   ipcMain.handle('browser-ui', async (event, command, payload = {}) => {
     const isMainSender = event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame;
     const isModalSender = Boolean(mcpModal && !mcpModal.isDestroyed() &&
       event.sender === mcpModal.webContents && event.senderFrame === mcpModal.webContents.mainFrame);
-    if (!isMainSender && !(isModalSender && MODAL_ALLOWED_COMMANDS.has(command))) {
+    const isDiscoveryModalSender = Boolean(discoveryModal && !discoveryModal.isDestroyed() &&
+      event.sender === discoveryModal.webContents && event.senderFrame === discoveryModal.webContents.mainFrame);
+    if (!isMainSender && !(isModalSender && MODAL_ALLOWED_COMMANDS.has(command)) &&
+        !(isDiscoveryModalSender && DISCOVERY_MODAL_COMMANDS.has(command))) {
       throw new Error('Invalid UI sender');
+    }
+
+    if (command === 'discovery-modal-open') return openDiscoveryModal(payload?.result || null, payload?.focus_asin || null);
+    if (command === 'discovery-modal-data') return buildDiscoveryModalPayload();
+    if (command === 'discovery-modal-close') {
+      if (discoveryModal && !discoveryModal.isDestroyed()) discoveryModal.close();
+      return { closed: true };
+    }
+    if (command === 'discovery-modal-open-url') {
+      const targetUrl = engine.validateUrl(String(payload?.url || ''));
+      const tab = await engine.newTab(targetUrl, { activate: true });
+      if (payload?.close_modal !== false && discoveryModal && !discoveryModal.isDestroyed()) discoveryModal.close();
+      window.focus();
+      return engine.describe(tab);
     }
 
     if (command === 'mcp-connector-open') return openMcpModal();
@@ -287,6 +376,7 @@ app.whenReady().then(async () => {
 app.on('window-all-closed', () => app.quit());
 app.on('before-quit', () => {
   if (mcpModal && !mcpModal.isDestroyed()) mcpModal.destroy();
+  if (discoveryModal && !discoveryModal.isDestroyed()) discoveryModal.destroy();
   relay?.close();
   engine?.watches.endAll('browser_closed');
   engine?.plugins.onBeforeQuit(engine);

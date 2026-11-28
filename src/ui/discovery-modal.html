@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https://*.media-amazon.com https://*.ssl-images-amazon.com https://*.images-amazon.com">
+  <title>AI 选品画廊</title>
+  <link rel="stylesheet" href="discovery-modal.css">
+</head>
+<body>
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dm-title">
+    <header class="dialog-header">
+      <div class="header-left">
+        <div class="header-icon" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/>
+          </svg>
+        </div>
+        <div class="header-meta">
+          <div class="title-row">
+            <h1 id="dm-title">AI 选品画廊</h1>
+            <span id="dm-keyword-pill" class="kw-pill">Amazon US</span>
+          </div>
+          <p id="dm-summary" class="subtitle">已观察 0 件 · 精选 0 件</p>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <div class="filter-pills" role="tablist">
+          <button id="f-all" class="filter-pill active" type="button">全部 <span id="c-all" class="pill-n">0</span></button>
+          <button id="f-eligible" class="filter-pill" type="button">符合 <span id="c-eligible" class="pill-n">0</span></button>
+          <button id="f-evidence" class="filter-pill" type="button">待核 <span id="c-evidence" class="pill-n">0</span></button>
+        </div>
+        <button id="btn-csv" class="btn-outline-sm" type="button">CSV</button>
+        <button id="btn-json" class="btn-outline-sm" type="button">JSON</button>
+        <button id="btn-close" class="icon-btn close-btn" type="button" aria-label="关闭">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <div class="split-body">
+      <!-- Left: 2-Column Visual Product Card Grid -->
+      <section class="gallery-pane">
+        <div id="gallery-grid" class="gallery-grid"></div>
+        <div id="gallery-empty" class="empty-state" hidden>暂无匹配商品</div>
+      </section>
+
+      <!-- Right: Detailed Product Preview Panel -->
+      <aside id="detail-pane" class="detail-pane">
+        <div id="detail-empty" class="empty-state">点击左侧商品卡片查看详细预览</div>
+        <div id="detail-content" class="detail-content" hidden>
+          <div class="hero-stage">
+            <img id="d-img" class="hero-img" alt="">
+            <div id="d-img-fallback" class="hero-fallback" hidden>
+              <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+            </div>
+            <span id="d-rank" class="stage-rank">#1</span>
+            <span id="d-decision" class="stage-decision">符合条件</span>
+          </div>
+
+          <div class="detail-head">
+            <h2 id="d-title" class="detail-title"></h2>
+            <div class="asin-row">
+              <span id="d-asin" class="asin-chip">B000000000</span>
+              <button id="btn-copy-asin" class="mini-ghost" type="button">复制 ASIN</button>
+              <span id="d-first-seen" class="seen-text"></span>
+            </div>
+          </div>
+
+          <!-- Direct Clickable Real URL Box -->
+          <div class="url-card">
+            <div class="url-label-row">
+              <span id="lbl-live-url" class="url-label">商品实际链接</span>
+              <button id="btn-copy-url" class="mini-ghost" type="button">复制链接</button>
+            </div>
+            <button id="d-url-link" class="url-link-btn" type="button" title="点击直接在浏览器标签页打开">
+              <span id="d-url-text" class="url-text"></span>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+            </button>
+          </div>
+
+          <!-- 4-Tile KPI Metrics -->
+          <div class="kpi-grid">
+            <div class="kpi-tile"><span id="k-price-lbl" class="kpi-lbl">售价</span><strong id="d-price" class="kpi-val kpi-accent">—</strong></div>
+            <div class="kpi-tile"><span id="k-demand-lbl" class="kpi-lbl">近月需求信号</span><strong id="d-demand" class="kpi-val">—</strong></div>
+            <div class="kpi-tile"><span id="k-rating-lbl" class="kpi-lbl">评分 / 评价数</span><strong id="d-rating" class="kpi-val">—</strong></div>
+            <div class="kpi-tile"><span id="k-profit-lbl" class="kpi-lbl">单件贡献 / 风险</span><strong id="d-profit" class="kpi-val">—</strong></div>
+          </div>
+
+          <!-- Transparent Reasons & Signals -->
+          <div class="reasons-box">
+            <div id="lbl-reasons" class="reasons-title">评估依据与信号</div>
+            <div id="d-reasons" class="reason-tags"></div>
+          </div>
+
+          <!-- Primary CTA -->
+          <div class="detail-cta-row">
+            <button id="btn-open-live" class="btn-primary-lg" type="button">进入亚马逊实际商品页 ↗</button>
+          </div>
+        </div>
+      </aside>
+    </div>
+
+    <footer class="dialog-footer">
+      <div id="dm-footer-status" class="footer-status" role="status">点击左侧卡片预览详情 · 点击链接直接进入实际商品页</div>
+      <div class="footer-actions">
+        <button id="btn-select-eligible" class="btn-outline" type="button" hidden>勾选符合条件</button>
+        <button id="btn-collect-selected" class="btn-primary" type="button" hidden>确认并采集已选</button>
+        <button id="btn-done" class="btn-outline" type="button">关闭</button>
+      </div>
+    </footer>
+  </div>
+
+  <script src="discovery-modal.js"></script>
+</body>
+</html>

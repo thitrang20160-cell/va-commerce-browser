@@ -9,6 +9,18 @@ export function amazonCandidate(raw) {
   return asin ? { asin, url: 'https://www.amazon.com/dp/' + asin } : null;
 }
 
+export function validAmazonImage(raw) {
+  if (typeof raw !== 'string' || raw.length > 2048) return null;
+  try {
+    const u = new URL(raw.trim());
+    if (u.protocol !== 'https:' || u.username || u.password) return null;
+    if (!/(?:^|\.)(?:media-amazon\.com|ssl-images-amazon\.com|images-amazon\.com)$/i.test(u.hostname)) return null;
+    return u.href;
+  } catch {
+    return null;
+  }
+}
+
 export function collectionCandidates(rows) {
   const candidates = new Map();
   const rejected = [];
@@ -23,7 +35,13 @@ export function collectionCandidates(rows) {
     if (candidates.has(parsed.asin)) continue;
     if (candidates.size >= maxCollectionItems) { overflow++; continue; }
     const title = typeof raw?.title === 'string' ? raw.title.trim().slice(0, 160) : '';
-    candidates.set(parsed.asin, { ...parsed, title: title || parsed.asin, ...(raw?.signals ? { signals:raw.signals } : {}) });
+    const image = validAmazonImage(raw?.image);
+    candidates.set(parsed.asin, {
+      ...parsed,
+      title: title || parsed.asin,
+      ...(image ? { image } : {}),
+      ...(raw?.signals ? { signals: raw.signals } : {}),
+    });
   }
   return { items: [...candidates.values()], rejected, overflow };
 }
@@ -50,6 +68,23 @@ function amazonCardSignals(card) {
   };
 }
 
+function amazonCardImage(card, anchor) {
+  const img = card?.querySelector('img.s-image, img[data-image-index], .s-product-image-container img, img') || anchor?.querySelector('img');
+  if (!img) return null;
+  const srcset = String(img.getAttribute('srcset') || '').trim();
+  if (srcset) {
+    const entries = srcset.split(',').map(part => {
+      const [u, desc] = part.trim().split(/\s+/);
+      const score = desc && /x$/i.test(desc) ? parseFloat(desc) : desc && /w$/i.test(desc) ? parseFloat(desc) / 300 : 1;
+      return { url: u, score: Number.isFinite(score) ? score : 1 };
+    }).filter(e => e.url && /^https:\/\//i.test(e.url));
+    entries.sort((a, b) => b.score - a.score);
+    if (entries[0]?.url) return entries[0].url;
+  }
+  const src = img.currentSrc || img.getAttribute('src') || img.getAttribute('data-src') || '';
+  return /^https:\/\//i.test(src) ? src : null;
+}
+
 function amazonPageCandidates() {
   if (!amazonTarget(location.href)) return { status: 'unsupported_store', rows: [] };
   const body = document.body?.innerText?.slice(0, 900) ?? '';
@@ -60,7 +95,11 @@ function amazonPageCandidates() {
   if (/^\/ap\/signin/.test(location.pathname)) return { status: 'sign_in_required', rows: [] };
   const current = amazonTarget(location.href);
   const title = document.querySelector('#productTitle')?.textContent?.trim();
-  if (current.asin && title) return { status: 'ok', rows: [{ url: location.href, title }] };
+  if (current.asin && title) {
+    const heroImg = document.querySelector('#landingImage, #imgBlkFront, #main-image')?.getAttribute('data-old-hires') ||
+      document.querySelector('#landingImage, #imgBlkFront, #main-image')?.getAttribute('src') || null;
+    return { status: 'ok', rows: [{ url: location.href, title, image: heroImg }] };
+  }
 
   const rows = new Map();
   const cards = document.querySelectorAll('[data-component-type="s-search-result"], #zg-ordered-list li, #gridItemRoot, #zg-center-div li');
@@ -69,7 +108,8 @@ function amazonPageCandidates() {
     const target = amazonTarget(anchor.href);
     if (!target?.asin || rows.has(target.asin) || rows.size >= 150) return;
     const name = (label || anchor.querySelector('img')?.alt || anchor.getAttribute('aria-label') || anchor.textContent || '').trim();
-    if (name) rows.set(target.asin, { url: anchor.href, title: name.slice(0, 160), signals:amazonCardSignals(card) });
+    const image = amazonCardImage(card, anchor);
+    if (name) rows.set(target.asin, { url: anchor.href, title: name.slice(0, 160), ...(image ? { image } : {}), signals: amazonCardSignals(card) });
   };
   for (const card of cards) {
     if (!card.getClientRects().length) continue;
@@ -88,7 +128,7 @@ function amazonPageCandidates() {
   return { status: 'ok', rows: [...rows.values()] };
 }
 
-export const productCandidatesExpression = `(() => { ${amazonTarget.toString()}; ${amazonCardSignals.toString()}; return (${amazonPageCandidates.toString()})(); })()`;
+export const productCandidatesExpression = `(() => { ${amazonTarget.toString()}; ${amazonCardSignals.toString()}; ${amazonCardImage.toString()}; return (${amazonPageCandidates.toString()})(); })()`;
 
 export async function productCandidates(engine, { tab_id, include_open_tabs, links = [] }) {
   const rows = [];

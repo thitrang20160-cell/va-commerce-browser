@@ -121,7 +121,9 @@
       discoveryExportCsv: 'CSV',
       discoveryExportJson: 'JSON',
       discoveryConfirm: n => (n ? '确认并采集 ' + n + ' 件' : '确认并开始采集'),
-      discoveryOpenProduct: '打开商品',
+      discoveryOpenModal: '弹窗画廊',
+      discoveryPreviewItem: '详细预览',
+      discoveryOpenProduct: '打开链接',
       discoveryExported: path => '已导出报告：' + path,
     },
     en: {
@@ -245,7 +247,9 @@
       discoveryExportCsv: 'CSV',
       discoveryExportJson: 'JSON',
       discoveryConfirm: n => (n ? 'Collect ' + n + ' Selected' : 'Confirm & Collect'),
-      discoveryOpenProduct: 'Open Product',
+      discoveryOpenModal: 'Visual Gallery',
+      discoveryPreviewItem: 'Preview',
+      discoveryOpenProduct: 'Open URL',
       discoveryExported: path => 'Exported report: ' + path,
     },
   };

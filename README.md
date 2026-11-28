@@ -1,4 +1,4 @@
-# VA 电商AI浏览器 · VA Commerce Browser (`v0.6.3`)
+# VA 电商AI浏览器 · VA Commerce Browser (`v0.6.4`)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-14b8a6.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-22%2B-339933.svg)](https://nodejs.org/)
@@ -8,7 +8,7 @@
 
 **One visible desktop browser shared safely across Claude Code, Codex, Cursor, Windsurf, and any MCP client — with persistent real logins, zero-disruption background execution, 180s per-tab agent leases, `-93.5%` compact snapshots, local video reading, SHA-256 idempotent action receipts, built-in 1-click MCP Connectors modal, and a 50-line site extractor plugin host.**
 
-> **中文简介（VA 电商AI浏览器）**：面向 AI Agent 与跨境电商团队的开源可见桌面浏览器（MIT）。让 Claude Code / Codex / Cursor / Windsurf 通过标准 MCP 共享同一个真实登录浏览器——**后台静默执行不抢前台、多 Agent 分标签页租约隔离、紧凑快照直省 93.5% Token、写操作 SHA-256 幂等回执防重复下单、本机 FFmpeg/Whisper 读网页视频（音频零上传云端）、内置弹窗式一键 MCP 连接器、深浅双主题与可折叠侧边栏**，并支持顶部栏一键切换 **EN / 中文**。
+> **中文简介（VA 电商AI浏览器）**：面向 AI Agent 与跨境电商团队的开源可见桌面浏览器（MIT）。让 Claude Code / Codex / Cursor / Windsurf 通过标准 MCP 共享同一个真实登录浏览器——**后台静默执行不抢前台、多 Agent 分标签页租约隔离、紧凑快照直省 93.5% Token、写操作 SHA-256 幂等回执防重复下单、本机 FFmpeg/Whisper 读网页视频（音频零上传云端）、弹窗式一键 MCP 连接器、AI 选品图文弹窗画廊（高清商品图 + 分屏详细预览 + 直达真实商品 URL）、深浅双主题与可折叠侧边栏**，并支持顶部栏一键切换 **EN / 中文**。
 
 ---
 
@@ -34,7 +34,7 @@ Most browser automation MCP servers force a painful trade-off: spawn disposable 
 
 **VA Commerce Browser is built for real human + multi-agent daily work:**
 
-| Capability | Playwright / Puppeteer MCP | Headless Browser-Use Agents | **VA 电商AI浏览器 (`v0.6.3`)** |
+| Capability | Playwright / Puppeteer MCP | Headless Browser-Use Agents | **VA 电商AI浏览器 (`v0.6.4`)** |
 | --- | --- | --- | --- |
 | **Persistent visible browser & real logins** | Ephemeral headless by default | Requires manual CDP attach | **Dedicated Electron desktop browser with persistent real profile** |
 | **Zero-disruption background execution** | Disrupts / steals active view | No interactive daily browsing shell | **Background tabs render off-top (`108/108` checks, `0` focus shifts)** |
@@ -71,8 +71,8 @@ Measured locally with `tiktoken` (`o200k_base`) on real pages:
    `browser_video_list`, `browser_video_read`, and `browser_video_seek_frames` extract real rendered frames from active `<video>` players, parse timed `<track>` captions, and optionally invoke **local FFmpeg + local Whisper** to transcribe spoken audio without uploading private videos or audio to any third-party cloud.
 5. **Default-Off Per-Origin Site Permissions**
    Clipboard writes (one-time 60s grant or remembered origin), camera, microphone, geolocation, notifications, and confirmed desktop screen sharing are all governed per origin and default to deny.
-6. **Lightweight Plugin Host & Built-in E-Commerce Discovery Showcase**
-   `v0.6.0` cleanly decouples the **Core MCP Browser Kernel** from **Site Plugins** (`src/plugin-host.js`). Out of the box, it ships `oss-discovery` (`browser_product_discover`) — reading up to 30 live Amazon US results in the background, ranking top 10 with transparent `eligible` / `needs_evidence` / `excluded` decisions, merging external attributed `evidence[]`, and exporting **CSV / JSON reports** directly from the sidebar. Build your own Shopify, Jira, GitHub, or internal portal extractor in 5 minutes via [docs/PLUGIN_GUIDE.md](docs/PLUGIN_GUIDE.md).
+6. **Lightweight Plugin Host & Visual AI Discovery Gallery Modal**
+   `v0.6.4` pairs the decoupled **Core MCP Browser Kernel** and **Site Plugins** (`src/plugin-host.js`) with a native **Visual Discovery Gallery Modal**: `oss-discovery` (`browser_product_discover`) reads up to 30 live Amazon US candidates with high-res product photos in the background, ranks the top 10 with transparent `eligible` / `needs_evidence` / `excluded` decisions, opens a master-detail visual gallery modal (2-column product photo cards + right-hand detailed preview with clickable direct Amazon URLs, KPI tiles & signals), and exports **CSV / JSON reports** in one click. Build your own Shopify, Jira, GitHub, or internal portal extractor in 5 minutes via [docs/PLUGIN_GUIDE.md](docs/PLUGIN_GUIDE.md).
 
 ---
 
